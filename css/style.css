@@ -240,6 +240,13 @@ a { text-decoration: none; color: inherit; }
   padding-bottom: 50px;
 }
 
+.loading-msg {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #888;
+  padding: 60px 0;
+}
+
 .card {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -278,8 +285,7 @@ a { text-decoration: none; color: inherit; }
 }
 .card .stock.ok { color: var(--green); }
 .card .stock.out { color: var(--gray-text); }
-.card .btn {
-  margin-top: auto;
+.btn {
   display: inline-block;
   padding: 10px 14px;
   border-radius: 3px;
@@ -288,10 +294,11 @@ a { text-decoration: none; color: inherit; }
   cursor: pointer;
   border: none;
 }
-.card .btn.buy { background: var(--blue); color: #fff; }
-.card .btn.buy:hover { background: var(--blue-dark); }
-.card .btn.detail { background: #e4e4e4; color: #444; }
-.card .btn.detail:hover { background: #d3d3d3; }
+.btn.buy { background: var(--blue); color: #fff; }
+.btn.buy:hover { background: var(--blue-dark); }
+.btn.detail { background: #e4e4e4; color: #444; }
+.btn.detail:hover { background: #d3d3d3; }
+.card .btn { margin-top: auto; }
 
 /* ---------- Product detail ---------- */
 .product-detail {
@@ -366,6 +373,54 @@ a { text-decoration: none; color: inherit; }
 .cart-table .remove { color: #c0392b; cursor: pointer; font-size: 13px; background: none; border: none; }
 .cart-total { text-align: right; font-size: 18px; font-weight: bold; margin-bottom: 30px; }
 .empty-cart { padding: 60px 0; text-align: center; color: #888; }
+
+/* ---------- Admin ---------- */
+.admin-table th, .admin-table td { vertical-align: middle; }
+.admin-thumb { width: 50px; height: 50px; object-fit: contain; }
+
+.admin-form-panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 24px;
+  margin-top: 10px;
+}
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.admin-form-grid .span-2 { grid-column: 1 / -1; }
+.admin-form-grid label { font-size: 14px; font-weight: 600; color: #444; }
+.admin-form-grid input,
+.admin-form-grid select,
+.admin-form-grid textarea {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.link-edit-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.link-edit-row input {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.link-edit-row .remove-link-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  color: #c0392b;
+}
 
 /* ---------- Footer ---------- */
 footer {

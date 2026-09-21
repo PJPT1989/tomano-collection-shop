@@ -8,7 +8,7 @@ function productCard(p) {
     : `<a class="btn detail" href="product.html?id=${p.id}">DETAIL</a>`;
   return `
     <div class="card">
-      <a href="product.html?id=${p.id}"><img src="images/products/${p.img}" alt="${p.name}"></a>
+      <a href="product.html?id=${p.id}"><img src="${p.img}" alt="${p.name}"></a>
       <a class="name" href="product.html?id=${p.id}">${p.name}</a>
       <div class="price">${formatKc(p.price)} <span class="eur">(${p.eur} Euro s DPH)</span></div>
       <div class="stock ${stockClass}">${stockLabel}</div>
@@ -85,7 +85,7 @@ function renderProduct() {
   const stockClass = p.stock > 0 ? "ok" : "out";
   const stockLabel = p.stock > 0 ? `Skladem ${p.stock} Ks` : "Skladem 0";
   container.innerHTML = `
-    <img src="images/products/${p.img}" alt="${p.name}">
+    <img src="${p.img}" alt="${p.name}">
     <div>
       <h1>${p.name}</h1>
       <div class="price-big">${formatKc(p.price)}</div>
@@ -131,7 +131,7 @@ function renderCart() {
     total += sub;
     return `
       <tr>
-        <td><img src="images/products/${p.img}" alt="${p.name}"></td>
+        <td><img src="${p.img}" alt="${p.name}"></td>
         <td><a href="product.html?id=${p.id}">${p.name}</a></td>
         <td>${formatKc(p.price)}</td>
         <td><input type="number" min="1" value="${qty}" onchange="setQty('${p.id}', this.value); renderCart();"></td>
@@ -143,7 +143,17 @@ function renderCart() {
   if (totalEl) totalEl.textContent = "Celkem: " + formatKc(total);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+async function bootShop(category) {
+  const grid = document.getElementById("grid");
+  if (grid) grid.innerHTML = `<p class="loading-msg">Načítání produktů…</p>`;
+
+  PRODUCTS = await fetchProducts();
+
+  if (category) renderGrid(category);
   renderProduct();
   renderCart();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  bootShop(document.body.dataset.category || null);
 });

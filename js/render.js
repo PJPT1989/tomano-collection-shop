@@ -100,7 +100,64 @@ function renderProduct() {
     <div class="description-block">
       <h2>Popis</h2>
       ${renderDescription(p.desc) || "<p>Popis produktu zatím není k dispozici.</p>"}
+    </div>
+    <div class="description-block price-chart-block">
+      <h2>Vývoj tržní ceny (TCGPlayer, USD)</h2>
+      <div id="price-chart-status" class="chart-status-msg">Načítání historie cen…</div>
+      <canvas id="price-chart" style="display:none;"></canvas>
     </div>`;
+
+  renderPriceChart(p.id);
+}
+
+let priceChartInstance = null;
+
+async function renderPriceChart(productId) {
+  const statusEl = document.getElementById("price-chart-status");
+  const canvas = document.getElementById("price-chart");
+  if (!statusEl || !canvas) return;
+
+  const { data, error } = await supabaseClient
+    .from("price_history")
+    .select("price, scraped_at")
+    .eq("product_id", productId)
+    .order("scraped_at", { ascending: true });
+
+  if (error) {
+    statusEl.textContent = "Historii cen se nepodařilo načíst.";
+    return;
+  }
+  if (!data || data.length < 1) {
+    statusEl.textContent = "Historie cen zatím není k dispozici — vraťte se za pár dní.";
+    return;
+  }
+
+  statusEl.style.display = "none";
+  canvas.style.display = "block";
+
+  if (priceChartInstance) priceChartInstance.destroy();
+  priceChartInstance = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels: data.map(row => new Date(row.scraped_at).toLocaleDateString("cs-CZ")),
+      datasets: [{
+        label: "Tržní cena (USD)",
+        data: data.map(row => row.price),
+        borderColor: "#3e8fd0",
+        backgroundColor: "rgba(62,143,208,0.12)",
+        fill: true,
+        tension: 0.2,
+        pointRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => "$" + v } }
+      }
+    }
+  });
 }
 
 function renderCart() {

@@ -247,6 +247,16 @@ a { text-decoration: none; color: inherit; }
   padding: 60px 0;
 }
 
+.chart-status-msg {
+  color: #888;
+  font-size: 14px;
+  padding: 10px 0;
+}
+
+.price-chart-block canvas {
+  max-height: 320px;
+}
+
 .card {
   background: var(--bg);
   border: 1px solid var(--border);

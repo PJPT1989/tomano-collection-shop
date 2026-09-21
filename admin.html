@@ -53,9 +53,16 @@
       <button id="add-product-btn" class="btn buy">+ Nový produkt</button>
     </div>
 
+    <div class="sortbar" id="admin-cat-filter">
+      <button data-cat="all" class="active">Vše</button>
+      <button data-cat="draft">Draft</button>
+      <button data-cat="collector">Collector</button>
+      <button data-cat="set">Set</button>
+    </div>
+
     <table class="cart-table admin-table">
       <thead>
-        <tr><th>Obrázek</th><th>Název</th><th>Kategorie</th><th>Cena</th><th>Sklad</th><th></th><th></th></tr>
+        <tr><th>Poř.</th><th>Obrázek</th><th>Název</th><th>Kategorie</th><th>Cena</th><th>Sklad</th><th></th><th></th></tr>
       </thead>
       <tbody id="admin-table-body"></tbody>
     </table>
@@ -73,9 +80,21 @@
             </select>
           </label>
           <label class="span-2">Název<br><input type="text" id="field-name" required></label>
-          <label>Cena (Kč)<br><input type="number" id="field-price" min="0" required></label>
-          <label>Cena (EUR)<br><input type="number" id="field-eur" min="0" required></label>
+          <label>Měna ceny<br>
+            <select id="field-currency">
+              <option value="CZK">CZK</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </label>
+          <label>Cena<br><input type="number" id="field-price" min="0" step="0.01" required></label>
+          <div class="span-2" id="price-preview" style="font-size:13px; color:#888; margin-top:-8px;"></div>
           <label>Sklad (ks)<br><input type="number" id="field-stock" min="0" required></label>
+          <label>Sazba DPH<br>
+            <select id="field-vat">
+              <option value="">— nepřiřazeno —</option>
+            </select>
+          </label>
+          <label>Pozice v seznamu<br><input type="number" id="field-position" min="0" value="0"></label>
           <label class="span-2">Obrázek<br><input type="file" id="field-image" accept="image/*"></label>
           <div class="span-2"><img id="image-preview" style="display:none; max-width:200px; max-height:200px; margin-top:8px;"></div>
           <label class="span-2">Popis<br><textarea id="field-desc" rows="8"></textarea></label>
@@ -91,6 +110,34 @@
         </div>
       </form>
     </div>
+
+    <div class="admin-section-divider"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h1 class="page-title" style="margin:0;">Sazby DPH</h1>
+      <button id="add-vat-btn" class="btn buy">+ Nová sazba</button>
+    </div>
+
+    <table class="cart-table admin-table" style="max-width:500px;">
+      <thead>
+        <tr><th>Název</th><th>Sazba (%)</th><th></th><th></th></tr>
+      </thead>
+      <tbody id="vat-table-body"></tbody>
+    </table>
+
+    <div id="vat-form-panel" class="admin-form-panel" style="display:none; max-width:400px;">
+      <h2 id="vat-form-title">Nová sazba DPH</h2>
+      <form id="vat-form">
+        <div class="admin-form-grid">
+          <label class="span-2">Název (např. "21% - základní")<br><input type="text" id="vat-field-name" required></label>
+          <label class="span-2">Sazba (%)<br><input type="number" id="vat-field-rate" step="0.01" min="0" required></label>
+        </div>
+        <div style="margin-top:24px; display:flex; gap:10px;">
+          <button type="submit" id="vat-save-btn" class="btn buy">Uložit</button>
+          <button type="button" id="vat-cancel-btn" class="btn detail">Zrušit</button>
+        </div>
+      </form>
+    </div>
   </div>
 
 </div>
@@ -103,6 +150,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase-client.js"></script>
+<script src="js/currency.js"></script>
 <script src="js/admin.js"></script>
 </body>
 </html>

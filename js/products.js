@@ -22,6 +22,9 @@ async function fetchProducts() {
     stock: row.stock,
     img: row.img,
     desc: row.description,
-    links: row.links || []
+    links: row.links || [],
+    position: row.position || 0,
+    vatRateId: row.vat_rate_id,
+    priceCurrency: row.price_currency || "CZK"
   }));
 }

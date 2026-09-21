@@ -45,6 +45,24 @@ a { text-decoration: none; color: inherit; }
 .topbar a:hover { color: #fff; }
 .topbar .right a { margin-right: 0; margin-left: 20px; }
 
+.lang-toggle {
+  display: inline-flex;
+  margin-left: 20px;
+  border: 1px solid #444;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.lang-toggle button {
+  background: none;
+  border: none;
+  color: #999;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.lang-toggle button.active { background: var(--blue); color: #fff; }
+.lang-toggle button:hover:not(.active) { color: #fff; }
+
 .header-main {
   background: var(--black);
   padding: 18px 0 22px;
@@ -387,6 +405,29 @@ a { text-decoration: none; color: inherit; }
 /* ---------- Admin ---------- */
 .admin-table th, .admin-table td { vertical-align: middle; }
 .admin-thumb { width: 50px; height: 50px; object-fit: contain; }
+.admin-section-divider { border-top: 2px solid var(--border); margin: 50px 0 30px; }
+.admin-group-row td {
+  background: #f4f5f6;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: #666;
+  padding: 8px 10px;
+  border-top: 2px solid var(--border);
+}
+.reorder-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  color: #555;
+}
+.reorder-btn:disabled { opacity: .3; cursor: default; }
+.reorder-btn:hover:not(:disabled) { background: #eee; }
 
 .admin-form-panel {
   background: var(--bg);

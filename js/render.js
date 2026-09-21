@@ -1,5 +1,23 @@
 // Renders product grids, sort controls, product detail and cart pages.
 
+// Unit price in whichever currency is currently displayed (EUR in "en"
+// price-display mode, CZK otherwise), always computed live via the day's
+// CNB rate rather than a stored/stale value.
+function displayAmount(p) {
+  return getPriceLang() === "en" ? getEurPrice(p) : getCzkPrice(p);
+}
+
+function formatDisplayAmount(amount) {
+  return getPriceLang() === "en" ? "€" + amount.toLocaleString("en-US") : formatKc(amount);
+}
+
+function priceCardHtml(p) {
+  if (getPriceLang() === "en") {
+    return formatDisplayAmount(getEurPrice(p));
+  }
+  return `${formatKc(getCzkPrice(p))} <span class="eur">(${getEurPrice(p)} Euro s DPH)</span>`;
+}
+
 function productCard(p) {
   const stockClass = p.stock > 0 ? "ok" : "out";
   const stockLabel = p.stock > 0 ? `Skladem ${p.stock} Ks` : "Skladem 0";
@@ -10,7 +28,7 @@ function productCard(p) {
     <div class="card">
       <a href="product.html?id=${p.id}"><img src="${p.img}" alt="${p.name}"></a>
       <a class="name" href="product.html?id=${p.id}">${p.name}</a>
-      <div class="price">${formatKc(p.price)} <span class="eur">(${p.eur} Euro s DPH)</span></div>
+      <div class="price">${priceCardHtml(p)}</div>
       <div class="stock ${stockClass}">${stockLabel}</div>
       ${action}
     </div>`;
@@ -19,7 +37,8 @@ function productCard(p) {
 function renderGrid(category) {
   const grid = document.getElementById("grid");
   if (!grid) return;
-  let items = PRODUCTS.filter(p => p.cat === category);
+  let items = PRODUCTS.filter(p => p.cat === category)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   const countEl = document.getElementById("item-count");
   if (countEl) countEl.textContent = items.length;
 
@@ -34,8 +53,10 @@ function renderGrid(category) {
       btn.classList.add("active");
       const mode = btn.dataset.sort;
       let sorted = items.slice();
-      if (mode === "cheap") sorted.sort((a, b) => a.price - b.price);
-      else if (mode === "expensive") sorted.sort((a, b) => b.price - a.price);
+      // Always compare in CZK-equivalent — products can be priced in either
+      // currency, so raw p.price isn't comparable across them.
+      if (mode === "cheap") sorted.sort((a, b) => getCzkPrice(a) - getCzkPrice(b));
+      else if (mode === "expensive") sorted.sort((a, b) => getCzkPrice(b) - getCzkPrice(a));
       else if (mode === "az") sorted.sort((a, b) => a.name.localeCompare(b.name));
       paint(sorted);
     });
@@ -84,12 +105,15 @@ function renderProduct() {
   document.title = p.name + " - Tomano Collection";
   const stockClass = p.stock > 0 ? "ok" : "out";
   const stockLabel = p.stock > 0 ? `Skladem ${p.stock} Ks` : "Skladem 0";
+  const lang = getPriceLang();
+  const priceBig = lang === "en" ? formatDisplayAmount(getEurPrice(p)) : formatKc(getCzkPrice(p));
+  const priceEurLine = lang === "en" ? "" : `<div class="price-eur">${getEurPrice(p)} Euro s DPH</div>`;
   container.innerHTML = `
     <img src="${p.img}" alt="${p.name}">
     <div>
       <h1>${p.name}</h1>
-      <div class="price-big">${formatKc(p.price)}</div>
-      <div class="price-eur">${p.eur} Euro s DPH</div>
+      <div class="price-big">${priceBig}</div>
+      ${priceEurLine}
       <div class="stock ${stockClass}">${stockLabel}</div>
       <div class="qty-row">
         <input type="number" id="qty" value="1" min="1" ${p.stock > 0 ? "" : "disabled"}>
@@ -184,27 +208,35 @@ function renderCart() {
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) return "";
     const qty = cart[id];
-    const sub = p.price * qty;
+    const unit = displayAmount(p);
+    const sub = unit * qty;
     total += sub;
     return `
       <tr>
         <td><img src="${p.img}" alt="${p.name}"></td>
         <td><a href="product.html?id=${p.id}">${p.name}</a></td>
-        <td>${formatKc(p.price)}</td>
+        <td>${formatDisplayAmount(unit)}</td>
         <td><input type="number" min="1" value="${qty}" onchange="setQty('${p.id}', this.value); renderCart();"></td>
-        <td>${formatKc(sub)}</td>
+        <td>${formatDisplayAmount(sub)}</td>
         <td><button class="remove" onclick="removeFromCart('${p.id}'); renderCart();">Odebrat</button></td>
       </tr>`;
   }).join("");
 
-  if (totalEl) totalEl.textContent = "Celkem: " + formatKc(total);
+  if (totalEl) totalEl.textContent = "Celkem: " + formatDisplayAmount(total);
+}
+
+function onPriceLangChange() {
+  const category = document.body.dataset.category;
+  if (category) renderGrid(category);
+  renderProduct();
+  renderCart();
 }
 
 async function bootShop(category) {
   const grid = document.getElementById("grid");
   if (grid) grid.innerHTML = `<p class="loading-msg">Načítání produktů…</p>`;
 
-  PRODUCTS = await fetchProducts();
+  [PRODUCTS] = await Promise.all([fetchProducts(), fetchExchangeRate()]);
 
   if (category) renderGrid(category);
   renderProduct();

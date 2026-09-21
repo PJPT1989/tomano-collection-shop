@@ -2,6 +2,11 @@
 
 const CATEGORY_LABELS = { draft: "Draft", collector: "Collector", set: "Set" };
 let editingId = null; // null = creating a new product
+let editingVatId = null; // null = creating a new VAT rate
+let vatRates = [];
+let lastProductRows = [];
+let currentCategoryFilter = "all";
+const CATEGORY_ORDER = ["draft", "collector", "set"];
 
 function $(sel) { return document.querySelector(sel); }
 
@@ -33,6 +38,8 @@ async function showAdmin(email) {
   $("#admin-view").style.display = "block";
   $("#topbar-admin-status").style.display = "block";
   $("#logged-in-as").textContent = email;
+  await fetchExchangeRate();
+  await loadVatRates();
   await loadProductTable();
 }
 
@@ -61,30 +68,41 @@ $("#logout-btn").addEventListener("click", async (e) => {
 
 async function loadProductTable() {
   const tbody = $("#admin-table-body");
-  tbody.innerHTML = `<tr><td colspan="7">Načítání…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="8">Načítání…</td></tr>`;
 
   const { data, error } = await supabaseClient
     .from("products")
     .select("*")
     .order("cat", { ascending: true })
+    .order("position", { ascending: true })
     .order("name", { ascending: true });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="7">Chyba při načítání: ${escapeHtml(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8">Chyba při načítání: ${escapeHtml(error.message)}</td></tr>`;
     return;
   }
 
-  if (data.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7">Zatím žádné produkty.</td></tr>`;
-    return;
-  }
+  lastProductRows = data;
+  renderProductTable();
+}
 
-  tbody.innerHTML = data.map(p => `
+function productRowHtml(p, isFirst, isLast) {
+  const asHelper = { price: p.price, priceCurrency: p.price_currency };
+  const czk = getCzkPrice(asHelper);
+  const eur = getEurPrice(asHelper);
+  const priceLabel = p.price_currency === "EUR"
+    ? `${eur.toLocaleString("cs-CZ")} € <span style="color:#999;">(≈ ${czk.toLocaleString("cs-CZ")} Kč)</span>`
+    : `${czk.toLocaleString("cs-CZ")} Kč <span style="color:#999;">(≈ ${eur.toLocaleString("cs-CZ")} €)</span>`;
+  return `
     <tr>
+      <td>
+        <button class="reorder-btn" ${isFirst ? "disabled" : ""} onclick="moveProduct('${p.id}', -1)" title="Posunout výš">▲</button>
+        <button class="reorder-btn" ${isLast ? "disabled" : ""} onclick="moveProduct('${p.id}', 1)" title="Posunout níž">▼</button>
+      </td>
       <td><img src="${escapeHtml(p.img || '')}" alt="" class="admin-thumb"></td>
       <td>${escapeHtml(p.name)}</td>
       <td>${CATEGORY_LABELS[p.cat] || escapeHtml(p.cat)}</td>
-      <td>${p.price.toLocaleString("cs-CZ")} Kč</td>
+      <td>${priceLabel}</td>
       <td>${p.stock}</td>
       <td>
         <button class="btn detail" onclick="openEditForm('${p.id}')">Upravit</button>
@@ -92,7 +110,62 @@ async function loadProductTable() {
       <td>
         <button class="remove" onclick="deleteProduct('${p.id}', ${JSON.stringify(p.name)})">Smazat</button>
       </td>
-    </tr>`).join("");
+    </tr>`;
+}
+
+function renderProductTable() {
+  const tbody = $("#admin-table-body");
+  const data = lastProductRows;
+
+  if (data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8">Zatím žádné produkty.</td></tr>`;
+    return;
+  }
+
+  const cats = currentCategoryFilter === "all" ? CATEGORY_ORDER : [currentCategoryFilter];
+  let html = "";
+
+  cats.forEach(cat => {
+    const rows = data
+      .filter(p => p.cat === cat)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+    if (rows.length === 0) return;
+    html += `<tr class="admin-group-row"><td colspan="8">${CATEGORY_LABELS[cat] || cat} (${rows.length})</td></tr>`;
+    html += rows.map((p, i) => productRowHtml(p, i === 0, i === rows.length - 1)).join("");
+  });
+
+  tbody.innerHTML = html || `<tr><td colspan="8">Žádné produkty v této kategorii.</td></tr>`;
+}
+
+document.querySelectorAll("#admin-cat-filter button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#admin-cat-filter button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentCategoryFilter = btn.dataset.cat;
+    renderProductTable();
+  });
+});
+
+async function moveProduct(id, direction) {
+  const product = lastProductRows.find(p => p.id === id);
+  if (!product) return;
+  const sameCat = lastProductRows
+    .filter(p => p.cat === product.cat)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  const idx = sameCat.findIndex(p => p.id === id);
+  const swapIdx = idx + direction;
+  if (swapIdx < 0 || swapIdx >= sameCat.length) return;
+
+  const other = sameCat[swapIdx];
+  const [r1, r2] = await Promise.all([
+    supabaseClient.from("products").update({ position: other.position }).eq("id", product.id),
+    supabaseClient.from("products").update({ position: product.position }).eq("id", other.id)
+  ]);
+  if (r1.error || r2.error) {
+    alert("Změna pořadí selhala: " + (r1.error?.message || r2.error?.message));
+    return;
+  }
+  loadProductTable();
 }
 
 async function deleteProduct(id, name) {
@@ -138,11 +211,32 @@ function openAddForm() {
   $("#form-title").textContent = "Nový produkt";
   $("#product-form").reset();
   $("#field-id").disabled = false;
+  $("#field-currency").value = "CZK";
+  const defaultVat = vatRates.find(v => v.name === "21");
+  $("#field-vat").value = defaultVat ? defaultVat.id : "";
+  $("#field-position").value = 0;
   $("#links-editor").innerHTML = "";
   $("#image-preview").style.display = "none";
+  updatePricePreview();
   $("#form-panel").style.display = "block";
   $("#form-panel").scrollIntoView({ behavior: "smooth" });
 }
+
+function updatePricePreview() {
+  const amount = parseFloat($("#field-price").value);
+  const preview = $("#price-preview");
+  if (isNaN(amount)) {
+    preview.textContent = "";
+    return;
+  }
+  const asHelper = { price: amount, priceCurrency: $("#field-currency").value };
+  preview.textContent = $("#field-currency").value === "CZK"
+    ? `≈ ${getEurPrice(asHelper).toLocaleString("cs-CZ")} € při dnešním kurzu ČNB`
+    : `≈ ${getCzkPrice(asHelper).toLocaleString("cs-CZ")} Kč při dnešním kurzu ČNB`;
+}
+
+$("#field-price").addEventListener("input", updatePricePreview);
+$("#field-currency").addEventListener("change", updatePricePreview);
 
 async function openEditForm(id) {
   const { data: p, error } = await supabaseClient.from("products").select("*").eq("id", id).single();
@@ -156,11 +250,14 @@ async function openEditForm(id) {
   $("#field-id").disabled = true;
   $("#field-cat").value = p.cat;
   $("#field-name").value = p.name;
+  $("#field-currency").value = p.price_currency || "CZK";
   $("#field-price").value = p.price;
-  $("#field-eur").value = p.eur;
   $("#field-stock").value = p.stock;
+  $("#field-vat").value = p.vat_rate_id || "";
+  $("#field-position").value = p.position || 0;
   $("#field-desc").value = p.description || "";
   $("#field-image").value = "";
+  updatePricePreview();
   if (p.img) {
     $("#image-preview").src = p.img;
     $("#image-preview").style.display = "block";
@@ -207,20 +304,23 @@ $("#product-form").addEventListener("submit", async (e) => {
       imgPath = pub.publicUrl;
     }
 
+    const vatValue = $("#field-vat").value;
     const row = {
       id,
       cat: $("#field-cat").value,
       name: $("#field-name").value.trim(),
-      price: parseInt($("#field-price").value, 10),
-      eur: parseInt($("#field-eur").value, 10),
+      price: parseFloat($("#field-price").value),
+      price_currency: $("#field-currency").value,
       stock: parseInt($("#field-stock").value, 10),
+      vat_rate_id: vatValue ? parseInt(vatValue, 10) : null,
+      position: parseInt($("#field-position").value, 10) || 0,
       img: imgPath,
       description: $("#field-desc").value,
       links: collectLinks()
     };
 
-    if (!row.name || isNaN(row.price) || isNaN(row.eur) || isNaN(row.stock)) {
-      throw new Error("Vyplňte prosím název, cenu (Kč), cenu (EUR) a sklad.");
+    if (!row.name || isNaN(row.price) || isNaN(row.stock)) {
+      throw new Error("Vyplňte prosím název, cenu a sklad.");
     }
 
     const { error: saveError } = await supabaseClient.from("products").upsert(row);
@@ -245,6 +345,108 @@ $("#field-image").addEventListener("change", () => {
     $("#image-preview").style.display = "block";
   };
   reader.readAsDataURL(file);
+});
+
+// ---------- VAT rates ----------
+
+async function loadVatRates() {
+  const tbody = $("#vat-table-body");
+  tbody.innerHTML = `<tr><td colspan="4">Načítání…</td></tr>`;
+
+  const { data, error } = await supabaseClient
+    .from("vat_rates")
+    .select("*")
+    .order("rate", { ascending: true });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="4">Chyba při načítání: ${escapeHtml(error.message)}</td></tr>`;
+    return;
+  }
+
+  vatRates = data;
+
+  const select = $("#field-vat");
+  select.innerHTML = `<option value="">— nepřiřazeno —</option>` +
+    data.map(v => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join("");
+
+  if (data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4">Zatím žádné sazby DPH.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(v => `
+    <tr>
+      <td>${escapeHtml(v.name)}</td>
+      <td>${v.rate}%</td>
+      <td><button class="btn detail" onclick="openEditVatForm(${v.id})">Upravit</button></td>
+      <td><button class="remove" onclick="deleteVatRate(${v.id}, ${JSON.stringify(v.name)})">Smazat</button></td>
+    </tr>`).join("");
+}
+
+async function deleteVatRate(id, name) {
+  if (!confirm(`Opravdu smazat sazbu "${name}"? Produkty s touto sazbou o ni přijdou.`)) return;
+  const { error } = await supabaseClient.from("vat_rates").delete().eq("id", id);
+  if (error) {
+    alert("Smazání selhalo: " + error.message);
+    return;
+  }
+  loadVatRates();
+}
+
+function openAddVatForm() {
+  editingVatId = null;
+  $("#vat-form-title").textContent = "Nová sazba DPH";
+  $("#vat-form").reset();
+  $("#vat-form-panel").style.display = "block";
+  $("#vat-form-panel").scrollIntoView({ behavior: "smooth" });
+}
+
+function openEditVatForm(id) {
+  const v = vatRates.find(x => x.id === id);
+  if (!v) return;
+  editingVatId = id;
+  $("#vat-form-title").textContent = "Upravit sazbu DPH";
+  $("#vat-field-name").value = v.name;
+  $("#vat-field-rate").value = v.rate;
+  $("#vat-form-panel").style.display = "block";
+  $("#vat-form-panel").scrollIntoView({ behavior: "smooth" });
+}
+
+function closeVatForm() {
+  $("#vat-form-panel").style.display = "none";
+  editingVatId = null;
+}
+
+$("#add-vat-btn").addEventListener("click", openAddVatForm);
+$("#vat-cancel-btn").addEventListener("click", closeVatForm);
+
+$("#vat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const saveBtn = $("#vat-save-btn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Ukládám…";
+
+  try {
+    const row = {
+      name: $("#vat-field-name").value.trim(),
+      rate: parseFloat($("#vat-field-rate").value)
+    };
+    if (!row.name || isNaN(row.rate)) {
+      throw new Error("Vyplňte prosím název a sazbu.");
+    }
+    if (editingVatId) row.id = editingVatId;
+
+    const { error } = await supabaseClient.from("vat_rates").upsert(row);
+    if (error) throw error;
+
+    closeVatForm();
+    await loadVatRates();
+  } catch (err) {
+    alert("Uložení selhalo: " + err.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Uložit";
+  }
 });
 
 document.addEventListener("DOMContentLoaded", checkSession);

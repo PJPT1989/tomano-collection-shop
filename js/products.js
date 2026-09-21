@@ -18,7 +18,6 @@ async function fetchProducts() {
     cat: row.cat,
     name: row.name,
     price: row.price,
-    eur: row.eur,
     stock: row.stock,
     img: row.img,
     desc: row.description,

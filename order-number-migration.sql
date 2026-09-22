@@ -13,7 +13,11 @@
 -- the floor is written as a one-year special case rather than a permanent
 -- offset. generate-invoice's nextInvoiceNumber() has the matching floor.
 
-alter table orders add column order_number text unique;
+-- Written to be safe to re-run: the SQL editor executes a pasted script as
+-- one transaction, so a second run that trips on an already-applied
+-- statement rolls the whole thing back and tells you nothing useful.
+
+alter table orders add column if not exists order_number text unique;
 
 create or replace function assign_order_number() returns trigger as $$
 declare
@@ -39,6 +43,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists orders_assign_order_number on orders;
 create trigger orders_assign_order_number
   before insert on orders
   for each row execute function assign_order_number();

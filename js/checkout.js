@@ -115,6 +115,33 @@ $("#checkout-form").addEventListener("submit", async (e) => {
 
     try { localStorage.removeItem(CART_KEY); } catch (e) {}
 
+    if (payload.paymentMethod !== "cod") {
+      btn.textContent = "Přesměrování na platbu…";
+      const payRes = await fetch(`${SUPABASE_URL}/functions/v1/gopay-create-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ orderId: result.orderId }),
+      });
+      const payment = await payRes.json();
+
+      if (payRes.ok && payment.gatewayUrl) {
+        window.location.href = payment.gatewayUrl;
+        return;
+      }
+
+      // The order itself already exists, so a gateway failure is not a failed
+      // checkout — show it as placed and let the customer be contacted about
+      // payment rather than sending them back to a cart we just emptied.
+      $("#checkout-view").style.display = "none";
+      $("#checkout-confirmation").style.display = "block";
+      $("#confirmation-text").textContent =
+        `Vaše objednávka č. ${result.orderNumber} v hodnotě ${formatKc(result.totalCzk)} byla přijata, ale platební bránu se nepodařilo otevřít. Ozveme se vám s pokyny k platbě.`;
+      return;
+    }
+
     $("#checkout-view").style.display = "none";
     $("#checkout-confirmation").style.display = "block";
     $("#confirmation-text").textContent =

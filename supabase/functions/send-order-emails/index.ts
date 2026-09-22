@@ -25,7 +25,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SHIPPING_LABELS: Record<string, string> = { gls: "GLS", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
+const SHIPPING_LABELS: Record<string, string> = { gls: "GLS", gls_parcelshop: "GLS výdejní místo", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
 const PAYMENT_LABELS: Record<string, string> = { card: "Platební karta", bank_transfer: "Bankovní převod", cod: "Dobírka" };
 
 function formatKc(n: number) {

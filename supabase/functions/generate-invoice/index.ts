@@ -41,7 +41,7 @@ const SELLER = {
   swift: "GIBACZPX",
 };
 
-const SHIPPING_LABELS: Record<string, string> = { gls: "GLS", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
+const SHIPPING_LABELS: Record<string, string> = { gls: "GLS", gls_parcelshop: "GLS výdejní místo", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
 const PAYMENT_LABELS: Record<string, string> = { card: "Platební karta", bank_transfer: "Bankovní převod", cod: "Dobírka" };
 
 const CORS_HEADERS = {

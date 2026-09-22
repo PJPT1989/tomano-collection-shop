@@ -2,7 +2,7 @@
 // and manual order creation.
 
 const STATUS_LABELS = { new: "Nová", in_progress: "Zpracovává se", done: "Hotovo", cancelled: "Zrušeno" };
-const SHIPPING_LABELS = { gls: "GLS", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
+const SHIPPING_LABELS = { gls: "GLS", gls_parcelshop: "GLS výdejní místo", zasilkovna: "Zásilkovna", ceska_posta: "Česká pošta" };
 const PAYMENT_LABELS = { card: "Platební karta", bank_transfer: "Bankovní převod", cod: "Dobírka" };
 
 let lastOrders = [];
@@ -171,7 +171,9 @@ async function openOrderDetail(id) {
     <div class="admin-form-grid">
       <div><strong>Zákazník</strong><br>${escapeHtml(order.customer_name)}<br>${escapeHtml(order.customer_email)}<br>${escapeHtml(order.customer_phone || "")}</div>
       <div><strong>Fakturační adresa</strong><br>${escapeHtml(order.billing_street)}<br>${escapeHtml(order.billing_city)} ${escapeHtml(order.billing_zip)}<br>${escapeHtml(order.billing_country)}</div>
-      <div><strong>Doručovací adresa</strong><br>${escapeHtml(order.shipping_street)}<br>${escapeHtml(order.shipping_city)} ${escapeHtml(order.shipping_zip)}<br>${escapeHtml(order.shipping_country)}</div>
+      <div><strong>Doručovací adresa</strong><br>${escapeHtml(order.shipping_street)}<br>${escapeHtml(order.shipping_city)} ${escapeHtml(order.shipping_zip)}<br>${escapeHtml(order.shipping_country)}
+        ${order.pickup_point_id ? `<br><br><strong>Výdejní místo</strong><br>${escapeHtml(order.pickup_point_name)}<br><span style="color:#888; font-size:12px;">${escapeHtml(order.pickup_point_id)}</span>` : ""}
+      </div>
       <div>
         <strong>Doprava a platba</strong><br>
         ${SHIPPING_LABELS[order.shipping_method] || order.shipping_method}<br>
@@ -391,6 +393,11 @@ function renderOrderForm(title, order) {
         <label>Způsob dopravy<br>
           <select id="mo-shipping-method">
             <option value="gls" ${order?.shipping_method === "gls" ? "selected" : ""}>GLS</option>
+            <!-- Only selectable for an order that already has a pickup
+                 point: admin has no map to choose one with, and the DB
+                 rejects this method without one. Present so that editing a
+                 ParcelShop order doesn't silently fall back to "GLS". -->
+            <option value="gls_parcelshop" ${order?.shipping_method === "gls_parcelshop" ? "selected" : ""} ${order?.pickup_point_id ? "" : "disabled"}>GLS výdejní místo</option>
             <option value="zasilkovna" ${order?.shipping_method === "zasilkovna" ? "selected" : ""}>Zásilkovna</option>
             <option value="ceska_posta" ${order?.shipping_method === "ceska_posta" ? "selected" : ""}>Česká pošta</option>
           </select>

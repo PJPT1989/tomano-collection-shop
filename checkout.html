@@ -52,7 +52,7 @@
           <label class="span-2">Země<br><input type="text" id="co-bcountry" value="Česká republika" required></label>
         </div>
 
-        <label style="display:block; margin-top:14px; font-weight:600;">
+        <label id="co-same-address-label" style="display:block; margin-top:14px; font-weight:600;">
           <input type="checkbox" id="co-same-address" checked> Doručovací adresa je stejná jako fakturační
         </label>
 
@@ -68,9 +68,17 @@
 
         <h2 style="margin-top:24px;">Způsob dopravy</h2>
         <div class="radio-group">
-          <label><input type="radio" name="shipping-method" value="gls" checked> GLS</label>
+          <label><input type="radio" name="shipping-method" value="gls" checked> GLS &ndash; doručení na adresu</label>
+          <label><input type="radio" name="shipping-method" value="gls_parcelshop"> GLS &ndash; výdejní místo</label>
           <label><input type="radio" name="shipping-method" value="zasilkovna"> Zásilkovna</label>
           <label><input type="radio" name="shipping-method" value="ceska_posta"> Česká pošta</label>
+        </div>
+
+        <div id="parcelshop-picker" style="display:none; margin-top:14px;">
+          <div id="parcelshop-selected" class="parcelshop-selected">Vyberte prosím výdejní místo na mapě níže.</div>
+          <!-- src is set only once the option is chosen, so the GLS map
+               isn't loaded for every visitor who never picks a ParcelShop. -->
+          <iframe id="gls-map" title="Mapa výdejních míst GLS" class="parcelshop-map"></iframe>
         </div>
 
         <h2 style="margin-top:24px;">Způsob platby</h2>

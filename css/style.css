@@ -305,6 +305,24 @@ a { text-decoration: none; color: inherit; }
 .btn.detail:hover { background: #d3d3d3; }
 .btn.danger { background: #fdecea; color: #c0392b; }
 .btn.danger:hover { background: #f9d3ce; }
+.parcelshop-selected {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.parcelshop-selected.chosen { border-color: var(--green); }
+.parcelshop-selected .ps-name { font-weight: 600; }
+.parcelshop-selected .ps-warning { color: #c0392b; margin-top: 6px; }
+/* GLS ask for at least 690px; below that the map falls back to full width
+   and the picker is still usable, just tighter. */
+.parcelshop-map {
+  width: 100%;
+  min-height: 460px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
 .card .btn { margin-top: auto; }
 
 /* ---------- Product detail ---------- */

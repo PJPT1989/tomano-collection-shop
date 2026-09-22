@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { customer, billing, shipping, shippingMethod, paymentMethod, items, notes } = body;
+    const { customer, billing, shipping, shippingMethod, paymentMethod, pickupPoint, items, notes } = body;
 
     if (!customer?.name || !customer?.email || !billing?.street || !shipping?.street) {
       return jsonResponse({ error: "Chybí povinné údaje objednávky." }, 400);
@@ -53,8 +53,13 @@ Deno.serve(async (req) => {
     if (!Array.isArray(items) || items.length === 0) {
       return jsonResponse({ error: "Košík je prázdný." }, 400);
     }
-    if (!["gls", "zasilkovna", "ceska_posta"].includes(shippingMethod)) {
+    if (!["gls", "gls_parcelshop", "zasilkovna", "ceska_posta"].includes(shippingMethod)) {
       return jsonResponse({ error: "Neplatný způsob dopravy." }, 400);
+    }
+    // Enforced by a CHECK constraint too, but caught here so the customer
+    // gets a sentence rather than a database error.
+    if (shippingMethod === "gls_parcelshop" && !pickupPoint?.id) {
+      return jsonResponse({ error: "Nebylo vybráno výdejní místo GLS." }, 400);
     }
     if (!["card", "bank_transfer", "cod"].includes(paymentMethod)) {
       return jsonResponse({ error: "Neplatný způsob platby." }, 400);
@@ -122,6 +127,8 @@ Deno.serve(async (req) => {
         shipping_country: shipping.country || "Česká republika",
         shipping_method: shippingMethod,
         shipping_cost_czk: shippingCostCzk,
+        pickup_point_id: pickupPoint?.id || null,
+        pickup_point_name: pickupPoint?.name || null,
         payment_method: paymentMethod,
         paid: false,
         total_czk: totalCzk,

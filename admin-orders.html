@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Objednávky - Tomano Collection</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="container">
+    <div><a href="index.html">Zpět do obchodu</a></div>
+    <div class="right" id="topbar-admin-status" style="display:none;"><span id="logged-in-as"></span> &middot; <a href="#" id="logout-btn">Odhlásit</a></div>
+  </div>
+</div>
+
+<div class="header-main">
+  <div class="container">
+    <a href="index.html" class="logo">
+      <img src="images/logo.jpg" alt="Tomano Collection">
+    </a>
+  </div>
+</div>
+
+<div class="catnav" id="admin-nav" style="display:none;">
+  <div class="container">
+    <a href="admin.html">Produkty</a>
+    <a href="admin-orders.html" class="active">Objednávky</a>
+  </div>
+</div>
+
+<div class="container" style="padding-top:30px;">
+
+  <div id="login-view" style="max-width:380px; margin:60px auto;">
+    <h1 class="page-title" style="text-align:center;">Přihlášení administrátora</h1>
+    <form id="login-form" style="background:#fff; border:1px solid var(--border); border-radius:6px; padding:30px;">
+      <label style="display:block; margin-bottom:14px;">
+        E-mail<br>
+        <input type="email" id="login-email" required style="width:100%; padding:10px; border:1px solid var(--border); margin-top:4px;">
+      </label>
+      <label style="display:block; margin-bottom:18px;">
+        Heslo<br>
+        <input type="password" id="login-password" required style="width:100%; padding:10px; border:1px solid var(--border); margin-top:4px;">
+      </label>
+      <div id="login-error" style="color:#c0392b; margin-bottom:12px; font-size:14px;"></div>
+      <button type="submit" class="btn buy" style="width:100%; padding:12px;">Přihlásit se</button>
+    </form>
+  </div>
+
+  <div id="admin-view" style="display:none;">
+
+    <!-- ---------- Order list ---------- -->
+    <div id="order-list-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h1 class="page-title" style="margin:0;">Objednávky</h1>
+        <button id="new-order-btn" class="btn buy">+ Nová objednávka</button>
+      </div>
+
+      <div class="sortbar" id="order-status-filter">
+        <button data-status="all" class="active">Vše</button>
+        <button data-status="new">Nové</button>
+        <button data-status="in_progress">Zpracovává se</button>
+        <button data-status="done">Hotovo</button>
+        <button data-status="cancelled">Zrušeno</button>
+      </div>
+
+      <table class="cart-table admin-table">
+        <thead>
+          <tr><th>Č.</th><th>Datum</th><th>Zákazník</th><th>Celkem</th><th>Doprava</th><th>Platba</th><th>Zaplaceno</th><th>Faktura</th><th>Stav</th><th></th></tr>
+        </thead>
+        <tbody id="order-table-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ---------- Order detail / manual order form ---------- -->
+    <div id="order-detail-view" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h1 class="page-title" id="order-detail-title" style="margin:0;">Objednávka</h1>
+        <button id="back-to-list-btn" class="btn detail">&larr; Zpět na seznam</button>
+      </div>
+
+      <div id="order-detail-panel" class="admin-form-panel"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    <div><strong>Tomano Collection</strong> &middot; Administrace</div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/currency.js"></script>
+<script src="js/admin-common.js"></script>
+<script src="js/admin-orders.js"></script>
+</body>
+</html>

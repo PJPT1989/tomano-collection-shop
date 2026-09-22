@@ -3,6 +3,10 @@
 // Used by both the shop pages and admin.html.
 
 let EXCHANGE_RATE = 24.5; // emergency fallback only, overwritten below if available
+
+function formatKc(n) {
+  return n.toLocaleString("cs-CZ") + " Kč";
+}
 const FALLBACK_RATE_WARNING = "Nepodařilo se načíst aktuální kurz ČNB, používá se záložní hodnota.";
 
 async function fetchExchangeRate() {

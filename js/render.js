@@ -192,15 +192,18 @@ function renderCart() {
   const emptyEl = document.getElementById("empty-cart");
   const tableEl = document.getElementById("cart-table");
   const totalEl = document.getElementById("cart-total");
+  const checkoutCta = document.getElementById("checkout-cta");
 
   if (ids.length === 0) {
     if (emptyEl) emptyEl.style.display = "block";
     if (tableEl) tableEl.style.display = "none";
     if (totalEl) totalEl.style.display = "none";
+    if (checkoutCta) checkoutCta.style.display = "none";
     return;
   }
   if (emptyEl) emptyEl.style.display = "none";
   if (tableEl) tableEl.style.display = "table";
+  if (checkoutCta) checkoutCta.style.display = "block";
   if (totalEl) totalEl.style.display = "block";
 
   let total = 0;

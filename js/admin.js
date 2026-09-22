@@ -1,4 +1,5 @@
-// Admin page logic: login, product list, add/edit/delete, image upload.
+// Admin page logic: product list, add/edit/delete, image upload, VAT rates.
+// Auth/login lives in admin-common.js, shared with admin-orders.js.
 
 const CATEGORY_LABELS = { draft: "Draft", collector: "Collector", set: "Set" };
 let editingId = null; // null = creating a new product
@@ -8,61 +9,10 @@ let lastProductRows = [];
 let currentCategoryFilter = "all";
 const CATEGORY_ORDER = ["draft", "collector", "set"];
 
-function $(sel) { return document.querySelector(sel); }
-
-function escapeHtml(s) {
-  const div = document.createElement("div");
-  div.textContent = s == null ? "" : s;
-  return div.innerHTML;
-}
-
-// ---------- Auth ----------
-
-async function checkSession() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    showAdmin(session.user.email);
-  } else {
-    showLogin();
-  }
-}
-
-function showLogin() {
-  $("#login-view").style.display = "block";
-  $("#admin-view").style.display = "none";
-  $("#topbar-admin-status").style.display = "none";
-}
-
-async function showAdmin(email) {
-  $("#login-view").style.display = "none";
-  $("#admin-view").style.display = "block";
-  $("#topbar-admin-status").style.display = "block";
-  $("#logged-in-as").textContent = email;
-  await fetchExchangeRate();
+async function initAdminPage() {
   await loadVatRates();
   await loadProductTable();
 }
-
-$("#login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const email = $("#login-email").value.trim();
-  const password = $("#login-password").value;
-  const errEl = $("#login-error");
-  errEl.textContent = "";
-
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    errEl.textContent = "Přihlášení selhalo: " + error.message;
-    return;
-  }
-  showAdmin(data.user.email);
-});
-
-$("#logout-btn").addEventListener("click", async (e) => {
-  e.preventDefault();
-  await supabaseClient.auth.signOut();
-  showLogin();
-});
 
 // ---------- Product table ----------
 
@@ -108,7 +58,7 @@ function productRowHtml(p, isFirst, isLast) {
         <button class="btn detail" onclick="openEditForm('${p.id}')">Upravit</button>
       </td>
       <td>
-        <button class="remove" onclick="deleteProduct('${p.id}', ${JSON.stringify(p.name)})">Smazat</button>
+        <button class="remove" onclick="deleteProduct('${p.id}', ${escapeAttr(JSON.stringify(p.name))})">Smazat</button>
       </td>
     </tr>`;
 }
@@ -200,10 +150,6 @@ function collectLinks() {
     text: row.querySelector(".link-text").value.trim(),
     href: row.querySelector(".link-href").value.trim()
   })).filter(l => l.text && l.href);
-}
-
-function escapeAttr(s) {
-  return String(s).replace(/"/g, "&quot;");
 }
 
 function openAddForm() {
@@ -379,7 +325,7 @@ async function loadVatRates() {
       <td>${escapeHtml(v.name)}</td>
       <td>${v.rate}%</td>
       <td><button class="btn detail" onclick="openEditVatForm(${v.id})">Upravit</button></td>
-      <td><button class="remove" onclick="deleteVatRate(${v.id}, ${JSON.stringify(v.name)})">Smazat</button></td>
+      <td><button class="remove" onclick="deleteVatRate(${v.id}, ${escapeAttr(JSON.stringify(v.name))})">Smazat</button></td>
     </tr>`).join("");
 }
 
@@ -448,5 +394,3 @@ $("#vat-form").addEventListener("submit", async (e) => {
     saveBtn.textContent = "Uložit";
   }
 });
-
-document.addEventListener("DOMContentLoaded", checkSession);

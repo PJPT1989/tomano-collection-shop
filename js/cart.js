@@ -53,8 +53,4 @@ function updateCartCount() {
   el.style.display = n > 0 ? "inline-flex" : "none";
 }
 
-function formatKc(n) {
-  return n.toLocaleString("cs-CZ") + " Kč";
-}
-
 document.addEventListener("DOMContentLoaded", updateCartCount);

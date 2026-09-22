@@ -93,20 +93,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
 
   try {
-    const { orderId } = await req.json();
+    const { orderId, regenerate } = await req.json();
 
     const { data: order, error: orderErr } = await supabase.from("orders").select("*").eq("id", orderId).single();
     if (orderErr || !order) return jsonResponse({ error: "Objednávka nenalezena." }, 404);
 
     const { data: existing } = await supabase.from("invoices").select("*").eq("order_id", orderId).maybeSingle();
-    if (existing) return jsonResponse({ error: "Faktura pro tuto objednávku již existuje.", invoice: existing }, 409);
+    if (existing && !regenerate) return jsonResponse({ error: "Faktura pro tuto objednávku již existuje.", invoice: existing }, 409);
 
     const { data: items, error: itemsErr } = await supabase.from("order_items").select("*").eq("order_id", orderId);
     if (itemsErr) return jsonResponse({ error: itemsErr.message }, 500);
 
     const rate = await getExchangeRate();
-    const invoiceNumber = await nextInvoiceNumber();
-    const issuedAt = new Date();
+    // Regenerating (the order was edited after the invoice was issued) keeps
+    // the original invoice number and issue date — it's a correction of the
+    // same invoice, not a new one — and only the PDF content and totals
+    // reflect the edited order.
+    const invoiceNumber = existing ? existing.invoice_number : await nextInvoiceNumber();
+    const issuedAt = existing ? new Date(existing.issued_at) : new Date();
     const dueAt = new Date(issuedAt.getTime() + 14 * 24 * 60 * 60 * 1000);
 
     // ---------- Build the PDF ----------
@@ -329,18 +333,30 @@ Deno.serve(async (req) => {
     const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
 
     // ---------- Store + record ----------
-    const path = `${invoiceNumber}.pdf`;
+    const path = existing ? existing.pdf_url : `${invoiceNumber}.pdf`;
     const { error: uploadError } = await supabase.storage
       .from("invoices")
-      .upload(path, pdfBlob, { contentType: "application/pdf", upsert: false });
+      .upload(path, pdfBlob, { contentType: "application/pdf", upsert: !!existing });
     if (uploadError) return jsonResponse({ error: "Nahrání PDF selhalo: " + uploadError.message }, 500);
 
-    const { data: invoiceRow, error: insertError } = await supabase
-      .from("invoices")
-      .insert({ order_id: orderId, invoice_number: invoiceNumber, pdf_url: path })
-      .select()
-      .single();
-    if (insertError) return jsonResponse({ error: "Uložení faktury selhalo: " + insertError.message }, 500);
+    let invoiceRow, invoiceError;
+    if (existing) {
+      // The content just changed, so a previously-sent copy is now stale —
+      // clear sent_to_customer_at so the admin UI shows it needs resending.
+      ({ data: invoiceRow, error: invoiceError } = await supabase
+        .from("invoices")
+        .update({ pdf_url: path, sent_to_customer_at: null })
+        .eq("id", existing.id)
+        .select()
+        .single());
+    } else {
+      ({ data: invoiceRow, error: invoiceError } = await supabase
+        .from("invoices")
+        .insert({ order_id: orderId, invoice_number: invoiceNumber, pdf_url: path })
+        .select()
+        .single());
+    }
+    if (invoiceError) return jsonResponse({ error: "Uložení faktury selhalo: " + invoiceError.message }, 500);
 
     const { data: signed } = await supabase.storage.from("invoices").createSignedUrl(path, 3600);
 

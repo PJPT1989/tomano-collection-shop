@@ -303,6 +303,8 @@ a { text-decoration: none; color: inherit; }
 .btn.buy:hover { background: var(--blue-dark); }
 .btn.detail { background: #e4e4e4; color: #444; }
 .btn.detail:hover { background: #d3d3d3; }
+.btn.danger { background: #fdecea; color: #c0392b; }
+.btn.danger:hover { background: #f9d3ce; }
 .card .btn { margin-top: auto; }
 
 /* ---------- Product detail ---------- */

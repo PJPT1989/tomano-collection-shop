@@ -9,6 +9,9 @@ let lastOrders = [];
 let currentStatusFilter = "all";
 let allProductsForOrder = [];
 let manualOrderItems = [];
+let editingOrderId = null; // null while creating a new order; set to the order id while editing one
+let editingShippingCostCzk = 0; // preserved from the order being edited; manual orders don't expose a field for it
+let editingOriginalPaid = false; // so paid_at only changes when the "paid" checkbox actually flips during an edit
 
 async function initAdminPage() {
   await loadProductsForOrder();
@@ -81,7 +84,10 @@ function renderOrderTable() {
             `<option value="${val}" ${o.status === val ? "selected" : ""}>${label}</option>`).join("")}
         </select>
       </td>
-      <td><button class="btn detail" onclick="openOrderDetail(${o.id})">Detail</button></td>
+      <td>
+        <button class="btn detail" onclick="openOrderDetail(${o.id})">Detail</button>
+        <button class="btn danger" onclick="deleteOrder(${o.id})">Smazat</button>
+      </td>
     </tr>`).join("");
 }
 
@@ -102,6 +108,25 @@ async function updateOrderStatus(id, status) {
   }
   const o = lastOrders.find(x => x.id === id);
   if (o) o.status = status;
+}
+
+async function deleteOrder(id) {
+  if (!confirm(`Opravdu smazat objednávku #${id}? Tuto akci nelze vrátit zpět.`)) return;
+
+  // Order items/shipments/invoices cascade-delete at the DB level, but the
+  // invoice's PDF file in storage does not — remove it first or it becomes
+  // an orphaned file with no row pointing at it.
+  const { data: invoice } = await supabaseClient.from("invoices").select("pdf_url").eq("order_id", id).maybeSingle();
+  if (invoice?.pdf_url) {
+    await supabaseClient.storage.from("invoices").remove([invoice.pdf_url]);
+  }
+
+  const { error } = await supabaseClient.from("orders").delete().eq("id", id);
+  if (error) {
+    alert("Smazání objednávky selhalo: " + error.message);
+    return;
+  }
+  showOrderList();
 }
 
 function showOrderList() {
@@ -138,6 +163,11 @@ async function openOrderDetail(id) {
     </tr>`).join("");
 
   $("#order-detail-panel").innerHTML = `
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
+      <button class="btn detail" onclick="openEditOrderForm(${order.id})">Upravit objednávku</button>
+      <button class="btn danger" onclick="deleteOrder(${order.id})">Smazat objednávku</button>
+    </div>
+
     <div class="admin-form-grid">
       <div><strong>Zákazník</strong><br>${escapeHtml(order.customer_name)}<br>${escapeHtml(order.customer_email)}<br>${escapeHtml(order.customer_phone || "")}</div>
       <div><strong>Fakturační adresa</strong><br>${escapeHtml(order.billing_street)}<br>${escapeHtml(order.billing_city)} ${escapeHtml(order.billing_zip)}<br>${escapeHtml(order.billing_country)}</div>
@@ -280,41 +310,79 @@ async function loadProductsForOrder() {
 $("#new-order-btn").addEventListener("click", openNewOrderForm);
 
 function openNewOrderForm() {
+  editingOrderId = null;
+  editingShippingCostCzk = 0;
   manualOrderItems = [];
+  renderOrderForm("Nová objednávka", null);
+}
+
+async function openEditOrderForm(id) {
+  const { data: order, error: orderErr } = await supabaseClient.from("orders").select("*").eq("id", id).single();
+  const { data: items, error: itemsErr } = await supabaseClient.from("order_items").select("*").eq("order_id", id);
+  if (orderErr || itemsErr) {
+    alert("Nepodařilo se načíst objednávku: " + (orderErr?.message || itemsErr?.message));
+    return;
+  }
+
+  editingOrderId = id;
+  editingShippingCostCzk = order.shipping_cost_czk;
+  editingOriginalPaid = order.paid;
+  manualOrderItems = items.map(it => ({
+    productId: it.product_id,
+    name: it.name_snapshot,
+    qty: it.qty,
+    unitPriceCzk: it.unit_price_czk,
+    vatRate: it.vat_rate,
+  }));
+  renderOrderForm(`Upravit objednávku #${id}`, order);
+}
+
+// Shared by both the "new order" and "edit order" flows. `order` is null
+// when creating; when editing it pre-fills every field from the existing
+// row (manualOrderItems is already populated by openEditOrderForm before
+// this runs).
+function renderOrderForm(title, order) {
   $("#order-list-view").style.display = "none";
   $("#order-detail-view").style.display = "block";
-  $("#order-detail-title").textContent = "Nová objednávka";
+  $("#order-detail-title").textContent = title;
 
   const productOptions = allProductsForOrder.map(p =>
     `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+
+  const sameAddress = !order || (
+    order.shipping_street === order.billing_street &&
+    order.shipping_city === order.billing_city &&
+    order.shipping_zip === order.billing_zip &&
+    order.shipping_country === order.billing_country
+  );
 
   $("#order-detail-panel").innerHTML = `
     <form id="manual-order-form">
       <h2>Zákazník</h2>
       <div class="admin-form-grid">
-        <label class="span-2">Jméno a příjmení<br><input type="text" id="mo-name" required></label>
-        <label>E-mail<br><input type="email" id="mo-email" required></label>
-        <label>Telefon<br><input type="tel" id="mo-phone"></label>
+        <label class="span-2">Jméno a příjmení<br><input type="text" id="mo-name" required value="${escapeAttr(order?.customer_name || "")}"></label>
+        <label>E-mail<br><input type="email" id="mo-email" required value="${escapeAttr(order?.customer_email || "")}"></label>
+        <label>Telefon<br><input type="tel" id="mo-phone" value="${escapeAttr(order?.customer_phone || "")}"></label>
       </div>
 
       <h2 style="margin-top:20px;">Fakturační adresa</h2>
       <div class="admin-form-grid">
-        <label class="span-2">Ulice a č.p.<br><input type="text" id="mo-bstreet" required></label>
-        <label>Město<br><input type="text" id="mo-bcity" required></label>
-        <label>PSČ<br><input type="text" id="mo-bzip" required></label>
-        <label class="span-2">Země<br><input type="text" id="mo-bcountry" value="Česká republika" required></label>
+        <label class="span-2">Ulice a č.p.<br><input type="text" id="mo-bstreet" required value="${escapeAttr(order?.billing_street || "")}"></label>
+        <label>Město<br><input type="text" id="mo-bcity" required value="${escapeAttr(order?.billing_city || "")}"></label>
+        <label>PSČ<br><input type="text" id="mo-bzip" required value="${escapeAttr(order?.billing_zip || "")}"></label>
+        <label class="span-2">Země<br><input type="text" id="mo-bcountry" value="${escapeAttr(order?.billing_country || "Česká republika")}" required></label>
       </div>
 
       <label style="display:block; margin-top:14px; font-weight:600;">
-        <input type="checkbox" id="mo-same-address" checked> Doručovací adresa je stejná jako fakturační
+        <input type="checkbox" id="mo-same-address" ${sameAddress ? "checked" : ""}> Doručovací adresa je stejná jako fakturační
       </label>
-      <div id="mo-shipping-address" style="display:none;">
+      <div id="mo-shipping-address" style="display:${sameAddress ? "none" : "block"};">
         <h2 style="margin-top:20px;">Doručovací adresa</h2>
         <div class="admin-form-grid">
-          <label class="span-2">Ulice a č.p.<br><input type="text" id="mo-sstreet"></label>
-          <label>Město<br><input type="text" id="mo-scity"></label>
-          <label>PSČ<br><input type="text" id="mo-szip"></label>
-          <label class="span-2">Země<br><input type="text" id="mo-scountry" value="Česká republika"></label>
+          <label class="span-2">Ulice a č.p.<br><input type="text" id="mo-sstreet" value="${escapeAttr(order?.shipping_street || "")}"></label>
+          <label>Město<br><input type="text" id="mo-scity" value="${escapeAttr(order?.shipping_city || "")}"></label>
+          <label>PSČ<br><input type="text" id="mo-szip" value="${escapeAttr(order?.shipping_zip || "")}"></label>
+          <label class="span-2">Země<br><input type="text" id="mo-scountry" value="${escapeAttr(order?.shipping_country || "Česká republika")}"></label>
         </div>
       </div>
 
@@ -322,20 +390,20 @@ function openNewOrderForm() {
       <div class="admin-form-grid">
         <label>Způsob dopravy<br>
           <select id="mo-shipping-method">
-            <option value="gls">GLS</option>
-            <option value="zasilkovna">Zásilkovna</option>
-            <option value="ceska_posta">Česká pošta</option>
+            <option value="gls" ${order?.shipping_method === "gls" ? "selected" : ""}>GLS</option>
+            <option value="zasilkovna" ${order?.shipping_method === "zasilkovna" ? "selected" : ""}>Zásilkovna</option>
+            <option value="ceska_posta" ${order?.shipping_method === "ceska_posta" ? "selected" : ""}>Česká pošta</option>
           </select>
         </label>
         <label>Způsob platby<br>
           <select id="mo-payment-method">
-            <option value="card">Platební karta</option>
-            <option value="bank_transfer">Bankovní převod</option>
-            <option value="cod">Dobírka</option>
+            <option value="card" ${order?.payment_method === "card" ? "selected" : ""}>Platební karta</option>
+            <option value="bank_transfer" ${order?.payment_method === "bank_transfer" ? "selected" : ""}>Bankovní převod</option>
+            <option value="cod" ${order?.payment_method === "cod" ? "selected" : ""}>Dobírka</option>
           </select>
         </label>
       </div>
-      <label style="display:block; margin-top:10px;"><input type="checkbox" id="mo-paid"> Objednávka je již zaplacena</label>
+      <label style="display:block; margin-top:10px;"><input type="checkbox" id="mo-paid" ${order?.paid ? "checked" : ""}> Objednávka je již zaplacena</label>
 
       <h2 style="margin-top:20px;">Položky objednávky</h2>
       <div class="admin-form-grid">
@@ -354,12 +422,12 @@ function openNewOrderForm() {
       <div class="checkout-summary-total" id="mo-total">Celkem: 0 Kč</div>
 
       <h2 style="margin-top:20px;">Poznámka</h2>
-      <textarea id="mo-notes" rows="3" style="width:100%; padding:9px; border:1px solid var(--border); border-radius:3px;"></textarea>
+      <textarea id="mo-notes" rows="3" style="width:100%; padding:9px; border:1px solid var(--border); border-radius:3px;">${escapeHtml(order?.notes || "")}</textarea>
 
       <div id="mo-error" style="color:#c0392b; margin-top:14px;"></div>
 
       <div style="margin-top:20px; display:flex; gap:10px;">
-        <button type="submit" id="mo-submit-btn" class="btn buy">Vytvořit objednávku</button>
+        <button type="submit" id="mo-submit-btn" class="btn buy">${order ? "Uložit změny" : "Vytvořit objednávku"}</button>
       </div>
     </form>
   `;
@@ -440,41 +508,39 @@ async function submitManualOrder(e) {
     return;
   }
 
+  const isEdit = editingOrderId !== null;
   const sameAddress = $("#mo-same-address").checked;
-  const totalCzk = manualOrderItems.reduce((sum, it) => sum + it.unitPriceCzk * it.qty, 0);
+  const itemsTotalCzk = manualOrderItems.reduce((sum, it) => sum + it.unitPriceCzk * it.qty, 0);
+  const totalCzk = itemsTotalCzk + (isEdit ? editingShippingCostCzk : 0);
   const paid = $("#mo-paid").checked;
 
+  const orderFields = {
+    customer_name: $("#mo-name").value.trim(),
+    customer_email: $("#mo-email").value.trim(),
+    customer_phone: $("#mo-phone").value.trim() || null,
+    billing_street: $("#mo-bstreet").value.trim(),
+    billing_city: $("#mo-bcity").value.trim(),
+    billing_zip: $("#mo-bzip").value.trim(),
+    billing_country: $("#mo-bcountry").value.trim(),
+    shipping_street: sameAddress ? $("#mo-bstreet").value.trim() : $("#mo-sstreet").value.trim(),
+    shipping_city: sameAddress ? $("#mo-bcity").value.trim() : $("#mo-scity").value.trim(),
+    shipping_zip: sameAddress ? $("#mo-bzip").value.trim() : $("#mo-szip").value.trim(),
+    shipping_country: sameAddress ? $("#mo-bcountry").value.trim() : $("#mo-scountry").value.trim(),
+    shipping_method: $("#mo-shipping-method").value,
+    payment_method: $("#mo-payment-method").value,
+    paid,
+    total_czk: totalCzk,
+    notes: $("#mo-notes").value.trim() || null,
+    paid_at: isEdit
+      ? (paid === editingOriginalPaid ? undefined : (paid ? new Date().toISOString() : null))
+      : undefined,
+  };
+
   btn.disabled = true;
-  btn.textContent = "Vytvářím…";
+  btn.textContent = isEdit ? "Ukládám…" : "Vytvářím…";
 
   try {
-    const { data: order, error: orderError } = await supabaseClient.from("orders").insert({
-      status: "new",
-      created_by: "admin",
-      customer_name: $("#mo-name").value.trim(),
-      customer_email: $("#mo-email").value.trim(),
-      customer_phone: $("#mo-phone").value.trim() || null,
-      billing_street: $("#mo-bstreet").value.trim(),
-      billing_city: $("#mo-bcity").value.trim(),
-      billing_zip: $("#mo-bzip").value.trim(),
-      billing_country: $("#mo-bcountry").value.trim(),
-      shipping_street: sameAddress ? $("#mo-bstreet").value.trim() : $("#mo-sstreet").value.trim(),
-      shipping_city: sameAddress ? $("#mo-bcity").value.trim() : $("#mo-scity").value.trim(),
-      shipping_zip: sameAddress ? $("#mo-bzip").value.trim() : $("#mo-szip").value.trim(),
-      shipping_country: sameAddress ? $("#mo-bcountry").value.trim() : $("#mo-scountry").value.trim(),
-      shipping_method: $("#mo-shipping-method").value,
-      shipping_cost_czk: 0,
-      payment_method: $("#mo-payment-method").value,
-      paid,
-      paid_at: paid ? new Date().toISOString() : null,
-      total_czk: totalCzk,
-      notes: $("#mo-notes").value.trim() || null,
-    }).select().single();
-
-    if (orderError) throw orderError;
-
-    const itemRows = manualOrderItems.map(it => ({
-      order_id: order.id,
+    const itemRowsBase = manualOrderItems.map(it => ({
       product_id: it.productId,
       name_snapshot: it.name,
       unit_price: it.unitPriceCzk,
@@ -484,22 +550,103 @@ async function submitManualOrder(e) {
       qty: it.qty,
       line_total_czk: it.unitPriceCzk * it.qty,
     }));
-    const { error: itemsError } = await supabaseClient.from("order_items").insert(itemRows);
-    if (itemsError) throw itemsError;
 
-    for (const it of manualOrderItems) {
-      const { data: current } = await supabaseClient.from("products").select("stock").eq("id", it.productId).single();
-      if (current) {
-        await supabaseClient.from("products").update({ stock: Math.max(0, current.stock - it.qty) }).eq("id", it.productId);
+    if (isEdit) {
+      const id = editingOrderId;
+      const { data: oldItems, error: oldItemsError } = await supabaseClient
+        .from("order_items").select("product_id, qty").eq("order_id", id);
+      if (oldItemsError) throw oldItemsError;
+
+      const { error: orderError } = await supabaseClient.from("orders")
+        .update(orderFields).eq("id", id);
+      if (orderError) throw orderError;
+
+      const { error: deleteItemsError } = await supabaseClient
+        .from("order_items").delete().eq("order_id", id);
+      if (deleteItemsError) throw deleteItemsError;
+
+      const { error: itemsError } = await supabaseClient.from("order_items")
+        .insert(itemRowsBase.map(row => ({ ...row, order_id: id })));
+      if (itemsError) throw itemsError;
+
+      await adjustStockForItemChange(oldItems || [], manualOrderItems);
+      await regenerateInvoiceIfExists(id);
+
+      editingOrderId = null;
+      openOrderDetail(id);
+    } else {
+      const { data: order, error: orderError } = await supabaseClient.from("orders").insert({
+        ...orderFields,
+        status: "new",
+        created_by: "admin",
+        shipping_cost_czk: 0,
+        paid_at: paid ? new Date().toISOString() : null,
+      }).select().single();
+      if (orderError) throw orderError;
+
+      const { error: itemsError } = await supabaseClient.from("order_items")
+        .insert(itemRowsBase.map(row => ({ ...row, order_id: order.id })));
+      if (itemsError) throw itemsError;
+
+      for (const it of manualOrderItems) {
+        const { data: current } = await supabaseClient.from("products").select("stock").eq("id", it.productId).single();
+        if (current) {
+          await supabaseClient.from("products").update({ stock: Math.max(0, current.stock - it.qty) }).eq("id", it.productId);
+        }
       }
-    }
 
-    triggerOrderEmails(order.id); // best-effort, don't block on it
-    showOrderList();
+      triggerOrderEmails(order.id); // best-effort, don't block on it
+      showOrderList();
+    }
   } catch (err) {
-    errEl.textContent = "Vytvoření objednávky selhalo: " + err.message;
+    errEl.textContent = (isEdit ? "Uložení změn selhalo: " : "Vytvoření objednávky selhalo: ") + err.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Vytvořit objednávku";
+    btn.textContent = isEdit ? "Uložit změny" : "Vytvořit objednávku";
+  }
+}
+
+// When an order's items are edited, stock needs to move by the difference
+// between the old and new quantity per product — not just be decremented
+// again — since the original quantity was already taken out of stock when
+// the order was first created.
+async function adjustStockForItemChange(oldItems, newItems) {
+  const oldQtyByProduct = {};
+  for (const it of oldItems) {
+    if (!it.product_id) continue;
+    oldQtyByProduct[it.product_id] = (oldQtyByProduct[it.product_id] || 0) + it.qty;
+  }
+  const newQtyByProduct = {};
+  for (const it of newItems) {
+    if (!it.productId) continue;
+    newQtyByProduct[it.productId] = (newQtyByProduct[it.productId] || 0) + it.qty;
+  }
+
+  const productIds = new Set([...Object.keys(oldQtyByProduct), ...Object.keys(newQtyByProduct)]);
+  for (const productId of productIds) {
+    const delta = (newQtyByProduct[productId] || 0) - (oldQtyByProduct[productId] || 0);
+    if (delta === 0) continue;
+    const { data: current } = await supabaseClient.from("products").select("stock").eq("id", productId).single();
+    if (current) {
+      await supabaseClient.from("products").update({ stock: Math.max(0, current.stock - delta) }).eq("id", productId);
+    }
+  }
+}
+
+// If the order already had an invoice issued, its content is now stale —
+// recreate the PDF (same invoice number, same issue date) so it reflects
+// the edited order instead of leaving a mismatched document on file.
+async function regenerateInvoiceIfExists(orderId) {
+  const { data: invoice } = await supabaseClient.from("invoices").select("id").eq("order_id", orderId).maybeSingle();
+  if (!invoice) return;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+    body: JSON.stringify({ orderId, regenerate: true }),
+  });
+  if (!res.ok) {
+    const result = await res.json().catch(() => ({}));
+    alert("Objednávka byla uložena, ale fakturu se nepodařilo znovu vygenerovat: " + (result.error || res.statusText));
   }
 }

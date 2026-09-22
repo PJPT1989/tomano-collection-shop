@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
         subject: `Faktura ${invoice.invoice_number} - Tomano Collection`,
         html: `
           <p>Dobrý den ${order.customer_name},</p>
-          <p>v příloze zasíláme fakturu č. ${invoice.invoice_number} k vaší objednávce #${order.id}.</p>
+          <p>v příloze zasíláme fakturu č. ${invoice.invoice_number} k vaší objednávce #${order.order_number}.</p>
           <p>Tomano Collection<br>Tománek Petr</p>
         `,
         attachments: [{ filename: `faktura-${invoice.invoice_number}.pdf`, content: pdfBase64 }],

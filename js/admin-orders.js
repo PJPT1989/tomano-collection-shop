@@ -70,7 +70,7 @@ function renderOrderTable() {
 
   tbody.innerHTML = rows.map(o => `
     <tr>
-      <td>#${o.id}</td>
+      <td>#${o.order_number}</td>
       <td>${new Date(o.created_at).toLocaleDateString("cs-CZ")}</td>
       <td>${escapeHtml(o.customer_name)}</td>
       <td>${formatKc(o.total_czk)}</td>
@@ -86,7 +86,7 @@ function renderOrderTable() {
       </td>
       <td>
         <button class="btn detail" onclick="openOrderDetail(${o.id})">Detail</button>
-        <button class="btn danger" onclick="deleteOrder(${o.id})">Smazat</button>
+        <button class="btn danger" onclick="deleteOrder(${o.id}, '${o.order_number}')">Smazat</button>
       </td>
     </tr>`).join("");
 }
@@ -110,8 +110,8 @@ async function updateOrderStatus(id, status) {
   if (o) o.status = status;
 }
 
-async function deleteOrder(id) {
-  if (!confirm(`Opravdu smazat objednávku #${id}? Tuto akci nelze vrátit zpět.`)) return;
+async function deleteOrder(id, orderNumber) {
+  if (!confirm(`Opravdu smazat objednávku #${orderNumber}? Tuto akci nelze vrátit zpět.`)) return;
 
   // Order items/shipments/invoices cascade-delete at the DB level, but the
   // invoice's PDF file in storage does not — remove it first or it becomes
@@ -151,7 +151,7 @@ async function openOrderDetail(id) {
 
   $("#order-list-view").style.display = "none";
   $("#order-detail-view").style.display = "block";
-  $("#order-detail-title").textContent = `Objednávka #${order.id}`;
+  $("#order-detail-title").textContent = `Objednávka #${order.order_number}`;
 
   const itemsHtml = items.map(it => `
     <tr>
@@ -165,7 +165,7 @@ async function openOrderDetail(id) {
   $("#order-detail-panel").innerHTML = `
     <div style="display:flex; gap:10px; margin-bottom:20px;">
       <button class="btn detail" onclick="openEditOrderForm(${order.id})">Upravit objednávku</button>
-      <button class="btn danger" onclick="deleteOrder(${order.id})">Smazat objednávku</button>
+      <button class="btn danger" onclick="deleteOrder(${order.id}, '${order.order_number}')">Smazat objednávku</button>
     </div>
 
     <div class="admin-form-grid">
@@ -334,7 +334,7 @@ async function openEditOrderForm(id) {
     unitPriceCzk: it.unit_price_czk,
     vatRate: it.vat_rate,
   }));
-  renderOrderForm(`Upravit objednávku #${id}`, order);
+  renderOrderForm(`Upravit objednávku #${order.order_number}`, order);
 }
 
 // Shared by both the "new order" and "edit order" flows. `order` is null

@@ -110,21 +110,21 @@ Deno.serve(async (req) => {
     `;
 
     const adminHtml = `
-      <p>Nová objednávka #${order.id} od ${escapeHtml(order.customer_name)} (${escapeHtml(order.customer_email)}, ${escapeHtml(order.customer_phone || "bez telefonu")}).</p>
+      <p>Nová objednávka #${order.order_number} od ${escapeHtml(order.customer_name)} (${escapeHtml(order.customer_email)}, ${escapeHtml(order.customer_phone || "bez telefonu")}).</p>
       ${summary}
     `;
 
     const results: Record<string, string> = { customer: "skipped", admin: "skipped" };
 
     try {
-      await sendEmail(order.customer_email, `Potvrzení objednávky #${order.id} - Tomano Collection`, customerHtml);
+      await sendEmail(order.customer_email, `Potvrzení objednávky #${order.order_number} - Tomano Collection`, customerHtml);
       results.customer = "sent";
     } catch (e) {
       results.customer = "error: " + (e as Error).message;
     }
 
     try {
-      await sendEmail(ADMIN_EMAIL, `Nová objednávka #${order.id}`, adminHtml);
+      await sendEmail(ADMIN_EMAIL, `Nová objednávka #${order.order_number}`, adminHtml);
       results.admin = "sent";
     } catch (e) {
       results.admin = "error: " + (e as Error).message;

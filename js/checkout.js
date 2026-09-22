@@ -118,7 +118,7 @@ $("#checkout-form").addEventListener("submit", async (e) => {
     $("#checkout-view").style.display = "none";
     $("#checkout-confirmation").style.display = "block";
     $("#confirmation-text").textContent =
-      `Vaše objednávka č. ${result.orderId} v hodnotě ${formatKc(result.totalCzk)} byla úspěšně přijata. Budeme vás kontaktovat s dalšími informacemi.`;
+      `Vaše objednávka č. ${result.orderNumber} v hodnotě ${formatKc(result.totalCzk)} byla úspěšně přijata. Budeme vás kontaktovat s dalšími informacemi.`;
   } catch (err) {
     errEl.textContent = err.message;
   } finally {

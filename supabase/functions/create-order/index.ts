@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
       });
     } catch (_e) { /* logged server-side via the function's own error handling */ }
 
-    return jsonResponse({ orderId: order.id, totalCzk, items: orderItems });
+    return jsonResponse({ orderId: order.id, orderNumber: order.order_number, totalCzk, items: orderItems });
   } catch (err) {
     return jsonResponse({ error: "Neočekávaná chyba: " + (err as Error).message }, 500);
   }

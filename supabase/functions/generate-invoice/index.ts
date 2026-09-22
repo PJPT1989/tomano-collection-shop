@@ -72,7 +72,12 @@ async function nextInvoiceNumber(): Promise<string> {
     .limit(1)
     .maybeSingle();
 
-  let seq = 1;
+  // The shop this project replaces had already issued 2026 invoices into the
+  // 40s, so our 2026 series starts above those rather than duplicating them.
+  // 2027 onwards is ours alone and starts at 1, which is why this is a
+  // one-year special case. Mirrors assign_order_number() in
+  // order-number-migration.sql.
+  let seq = prefix === "2026" ? 100 : 1;
   if (data?.invoice_number) {
     seq = parseInt(data.invoice_number.slice(prefix.length), 10) + 1;
   }
@@ -205,7 +210,7 @@ Deno.serve(async (req) => {
       `Datum vystavení: ${czDate(issuedAt)}`,
       `Datum splatnosti: ${czDate(dueAt)}`,
       `Datum usk. zdan. plnění: ${czDate(issuedAt)}`,
-      `Číslo objednávky: ${order.id}`,
+      `Číslo objednávky: ${order.order_number}`,
     ]) - boxGap;
 
     const buyerLines = [

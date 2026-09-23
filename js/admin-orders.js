@@ -108,6 +108,50 @@ async function updateOrderStatus(id, status) {
   }
   const o = lastOrders.find(x => x.id === id);
   if (o) o.status = status;
+
+  // Moving an order into processing is the point at which it's actually
+  // being packed, so that's when the carrier is told about it.
+  if (status === "in_progress" && o?.shipping_method === "zasilkovna" && o?.pickup_point_id) {
+    await createPacketaShipment(id);
+  }
+}
+
+// Shown in the page rather than through alert(): a carrier refusing a
+// shipment is something you need to read and act on, and native dialogs
+// can be suppressed by the browser — silently, which is the worst way for
+// this particular message to fail.
+function showOrderActionStatus(message, kind) {
+  const el = $("#order-action-status");
+  el.textContent = message;
+  el.style.display = "block";
+  el.style.background = kind === "error" ? "#fdecea" : "#eafaf1";
+  el.style.color = kind === "error" ? "#c0392b" : "#1e7e45";
+}
+
+// The function refuses to create a second packet for an order that already
+// has one, so flipping an order back and forth through "Zpracovává se"
+// can't produce duplicate consignments.
+async function createPacketaShipment(orderId) {
+  showOrderActionStatus("Předávám zásilku Zásilkovně…", "info");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/packeta-create-packet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+    body: JSON.stringify({ orderId }),
+  });
+  const result = await res.json();
+
+  if (!res.ok) {
+    showOrderActionStatus("Předání Zásilkovně selhalo: " + (result.error || res.statusText), "error");
+    return;
+  }
+  if (result.alreadyExisted) {
+    showOrderActionStatus(`Zásilka již existuje: ${result.shipment.tracking_number}`, "info");
+    return;
+  }
+
+  showOrderActionStatus(`Zásilka předána Zásilkovně. Číslo zásilky: ${result.shipment.tracking_number}`, "info");
+  loadOrders();
 }
 
 async function deleteOrder(id, orderNumber) {
@@ -143,6 +187,7 @@ async function openOrderDetail(id) {
   const { data: order, error: orderErr } = await supabaseClient.from("orders").select("*").eq("id", id).single();
   const { data: items, error: itemsErr } = await supabaseClient.from("order_items").select("*").eq("order_id", id);
   const { data: invoice } = await supabaseClient.from("invoices").select("*").eq("order_id", id).maybeSingle();
+  const { data: shipment } = await supabaseClient.from("shipments").select("*").eq("order_id", id).maybeSingle();
 
   if (orderErr || itemsErr) {
     alert("Nepodařilo se načíst objednávku: " + (orderErr?.message || itemsErr?.message));
@@ -196,6 +241,14 @@ async function openOrderDetail(id) {
       <button class="btn detail" id="resend-email-btn" onclick="resendOrderEmails(${order.id})">Znovu odeslat potvrzovací e-mail</button>
       <span id="resend-email-status" style="margin-left:10px; font-size:13px; color:#888;"></span>
     </div>
+
+    ${shipment ? `
+      <div class="admin-section-divider"></div>
+      <h3>Zásilka</h3>
+      <p><strong>${escapeHtml(SHIPPING_LABELS[order.shipping_method] || order.shipping_method)}</strong>
+      &middot; číslo zásilky ${escapeHtml(shipment.tracking_number || "—")}
+      &middot; předáno ${new Date(shipment.created_at).toLocaleDateString("cs-CZ")}</p>
+    ` : ""}
 
     <div class="admin-section-divider"></div>
     <h3>Faktura</h3>

@@ -56,10 +56,12 @@ Deno.serve(async (req) => {
     if (!["gls", "gls_parcelshop", "zasilkovna", "ceska_posta"].includes(shippingMethod)) {
       return jsonResponse({ error: "Neplatný způsob dopravy." }, 400);
     }
-    // Enforced by a CHECK constraint too, but caught here so the customer
-    // gets a sentence rather than a database error.
-    if (shippingMethod === "gls_parcelshop" && !pickupPoint?.id) {
-      return jsonResponse({ error: "Nebylo vybráno výdejní místo GLS." }, 400);
+    // Both pickup-point methods need one. Only gls_parcelshop is enforced
+    // by a CHECK constraint as well — zasilkovna is left out of it so admin
+    // can still take a phone order for Zásilkovna and process it by hand in
+    // the carrier's own system, as they do today.
+    if (["gls_parcelshop", "zasilkovna"].includes(shippingMethod) && !pickupPoint?.id) {
+      return jsonResponse({ error: "Nebylo vybráno výdejní místo." }, 400);
     }
     if (!["card", "bank_transfer", "cod"].includes(paymentMethod)) {
       return jsonResponse({ error: "Neplatný způsob platby." }, 400);

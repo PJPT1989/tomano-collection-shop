@@ -44,12 +44,27 @@ async function initCheckout() {
   cartLineItems = renderCheckoutSummary();
 }
 
-// ---------- GLS ParcelShop picker ----------
+// ---------- Pickup point selection ----------
+//
+// Two carriers with very different pickers — GLS is a map embedded in the
+// page that posts messages to us, Packeta opens a modal from their own
+// library — but everything after the choice is identical: one point, shown
+// the same way, validated the same way, and standing in for the delivery
+// address the same way. So only the pickers differ.
 
 const GLS_MAP_ORIGIN = "https://ps-maps.gls-czech.cz";
 const GLS_MAP_URL = `${GLS_MAP_ORIGIN}/?tdetail=3&header=0&ctrcode=CZ&lng=cs`;
 
-let selectedParcelShop = null;
+// Public by design: the widget cannot work without this reaching the
+// browser. The API password it resembles is a different value and lives
+// only in a Supabase secret.
+const PACKETA_API_KEY = "37394c4898449fea";
+
+const PICKUP_METHODS = ["gls_parcelshop", "zasilkovna"];
+
+// { id, name, street, city, zip, acceptsCod } — carrier-neutral, because
+// nothing downstream needs to know which picker produced it.
+let selectedPickupPoint = null;
 
 function selectedShippingMethod() {
   return document.querySelector('input[name="shipping-method"]:checked').value;
@@ -59,39 +74,34 @@ function selectedPaymentMethod() {
   return document.querySelector('input[name="payment-method"]:checked').value;
 }
 
-// GLS's documentation describes these flags as "t"/"f" (as isparcellocker
-// genuinely is), but the live map sends "1"/"0" for this one. Both are
-// accepted because neither source has proven reliable on its own, and
-// reading a yes as a no wrongly blocks a valid pickup point.
-function parcelShopAcceptsCod(shop) {
-  const flag = shop.iscodhandler;
-  return flag === "1" || flag === 1 || flag === "t" || flag === true;
+function needsPickupPoint(method) {
+  return PICKUP_METHODS.includes(method);
 }
 
 // Built as DOM nodes rather than innerHTML: this is data from another
 // origin, and text nodes can't smuggle markup into the page.
-function renderParcelShopSelection() {
-  const el = $("#parcelshop-selected");
+function renderPickupSelection() {
+  const el = $("#pickup-selected");
   el.textContent = "";
 
-  if (!selectedParcelShop) {
-    el.className = "parcelshop-selected";
-    el.textContent = "Vyberte prosím výdejní místo na mapě níže.";
+  if (!selectedPickupPoint) {
+    el.className = "pickup-selected";
+    el.textContent = "Vyberte prosím výdejní místo.";
     return;
   }
 
-  el.className = "parcelshop-selected chosen";
+  el.className = "pickup-selected chosen";
   const name = document.createElement("div");
   name.className = "ps-name";
-  name.textContent = selectedParcelShop.name;
+  name.textContent = selectedPickupPoint.name;
   const address = document.createElement("div");
   address.textContent =
-    `${selectedParcelShop.address}, ${selectedParcelShop.zipcode} ${selectedParcelShop.city}`;
+    `${selectedPickupPoint.street}, ${selectedPickupPoint.zip} ${selectedPickupPoint.city}`;
   el.append(name, address);
 
   // Only worth saying when it actually stands in the customer's way —
   // otherwise it reads as a problem with a pickup point that is fine.
-  if (selectedPaymentMethod() === "cod" && !parcelShopAcceptsCod(selectedParcelShop)) {
+  if (selectedPaymentMethod() === "cod" && !selectedPickupPoint.acceptsCod) {
     const warning = document.createElement("div");
     warning.className = "ps-warning";
     warning.textContent =
@@ -100,48 +110,110 @@ function renderParcelShopSelection() {
   }
 }
 
+// --- GLS: inline map, selection arrives by postMessage ---
+
 // GLS's own example listens to every message that arrives, whatever its
 // source. Checking the origin keeps any other frame or opener from
 // injecting a pickup point of its choosing into the order.
 window.addEventListener("message", (event) => {
   if (event.origin !== GLS_MAP_ORIGIN) return;
+  if (selectedShippingMethod() !== "gls_parcelshop") return;
 
   const detail = event.data?.parcelshop?.detail;
   if (!detail?.pclshopid) return;
 
-  selectedParcelShop = {
+  // Documented as "t"/"f" (as isparcellocker genuinely is), but the live
+  // map sends "1"/"0". Both are accepted because neither source has proven
+  // reliable alone, and reading a yes as a no blocks a valid pickup point.
+  const cod = detail.iscodhandler;
+
+  selectedPickupPoint = {
     id: detail.pclshopid,
     name: detail.name,
-    address: detail.address,
+    street: detail.address,
     city: detail.city,
-    zipcode: detail.zipcode,
-    iscodhandler: detail.iscodhandler,
+    zip: detail.zipcode,
+    acceptsCod: cod === "1" || cod === 1 || cod === "t" || cod === true,
   };
-  renderParcelShopSelection();
+  renderPickupSelection();
 });
 
-// Delivery goes to the shop itself, so the customer's own delivery address
-// is meaningless for that method — and leaving those inputs required while
-// hidden would block submission with no visible field to correct.
+// --- Packeta: modal opened by their library ---
+
+$("#packeta-pick-btn").addEventListener("click", () => {
+  // Restricted to Packeta's own Czech pickup points and Z-BOXes. External
+  // carriers' points identify themselves with a carrierId/carrierPickupPointId
+  // pair instead of a plain id, which packet creation would have to carry
+  // separately — worth enabling deliberately rather than by accident.
+  Packeta.Widget.pick(PACKETA_API_KEY, (point) => {
+    if (!point) return; // customer closed the widget
+
+    // Packeta flag these as temporarily unusable (vacation, over capacity,
+    // closing) and say outright that customers must not select them.
+    if (point.error) {
+      selectedPickupPoint = null;
+      renderPickupSelection();
+      $("#checkout-error").textContent =
+        "Toto výdejní místo je dočasně nedostupné. Vyberte prosím jiné.";
+      return;
+    }
+
+    $("#checkout-error").textContent = "";
+    selectedPickupPoint = {
+      id: point.id,
+      // `name` carries the full "Z-BOX Praha 12, Kamýk, Těšíkova 987"
+      // description. `place` sounds like the better choice and is for a
+      // shop, where it holds the shop's own name — but for a Z-BOX it is
+      // literally just "Z-BOX", which tells the customer nothing.
+      name: point.name || point.place,
+      street: point.street,
+      city: point.city,
+      zip: point.zip,
+      // Packeta govern cash on delivery per account rather than per point,
+      // so there is no per-point refusal to warn about here.
+      acceptsCod: true,
+    };
+    renderPickupSelection();
+  }, {
+    language: "cs",
+    country: "cz",
+    appIdentity: "tomano-collection",
+    vendors: [{ country: "cz" }, { country: "cz", group: "zbox" }],
+  });
+});
+
+// Delivery goes to the pickup point itself, so the customer's own delivery
+// address is meaningless for those methods — and leaving those inputs
+// required while hidden would block submission with no visible field to fix.
 function updateShippingAddressVisibility() {
-  const isParcelShop = selectedShippingMethod() === "gls_parcelshop";
+  const isPickup = needsPickupPoint(selectedShippingMethod());
   const sameAddress = $("#co-same-address").checked;
 
-  $("#co-same-address-label").style.display = isParcelShop ? "none" : "block";
-  $("#co-shipping-address").style.display = !isParcelShop && !sameAddress ? "block" : "none";
+  $("#co-same-address-label").style.display = isPickup ? "none" : "block";
+  $("#co-shipping-address").style.display = !isPickup && !sameAddress ? "block" : "none";
   ["co-sstreet", "co-scity", "co-szip"].forEach(id => {
-    $("#" + id).required = !isParcelShop && !sameAddress;
+    $("#" + id).required = !isPickup && !sameAddress;
   });
 }
 
 document.querySelectorAll('input[name="shipping-method"]').forEach(radio => {
   radio.addEventListener("change", () => {
-    const isParcelShop = selectedShippingMethod() === "gls_parcelshop";
-    $("#parcelshop-picker").style.display = isParcelShop ? "block" : "none";
+    const method = selectedShippingMethod();
+    const isGls = method === "gls_parcelshop";
+    const isPacketa = method === "zasilkovna";
+
+    // A GLS shop is not a valid Zásilkovna point and vice versa, so
+    // changing carrier discards the choice rather than carrying it over.
+    selectedPickupPoint = null;
+
+    $("#pickup-picker").style.display = needsPickupPoint(method) ? "block" : "none";
+    $("#gls-map").style.display = isGls ? "block" : "none";
+    $("#packeta-pick-btn").style.display = isPacketa ? "inline-block" : "none";
 
     const map = $("#gls-map");
-    if (isParcelShop && !map.getAttribute("src")) map.src = GLS_MAP_URL;
+    if (isGls && !map.getAttribute("src")) map.src = GLS_MAP_URL;
 
+    renderPickupSelection();
     updateShippingAddressVisibility();
   });
 });
@@ -151,7 +223,7 @@ $("#co-same-address").addEventListener("change", updateShippingAddressVisibility
 // Switching to dobírka has to be able to raise the warning on a pickup
 // point that was chosen before the payment method was.
 document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
-  radio.addEventListener("change", renderParcelShopSelection);
+  radio.addEventListener("change", renderPickupSelection);
 });
 
 $("#checkout-form").addEventListener("submit", async (e) => {
@@ -169,12 +241,12 @@ $("#checkout-form").addEventListener("submit", async (e) => {
   const shippingMethod = selectedShippingMethod();
   const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
 
-  if (shippingMethod === "gls_parcelshop") {
-    if (!selectedParcelShop) {
-      errEl.textContent = "Vyberte prosím výdejní místo GLS na mapě.";
+  if (needsPickupPoint(shippingMethod)) {
+    if (!selectedPickupPoint) {
+      errEl.textContent = "Vyberte prosím výdejní místo.";
       return;
     }
-    if (paymentMethod === "cod" && !parcelShopAcceptsCod(selectedParcelShop)) {
+    if (paymentMethod === "cod" && !selectedPickupPoint.acceptsCod) {
       errEl.textContent =
         "Zvolené výdejní místo nepřijímá dobírku. Vyberte prosím jiné místo nebo jiný způsob platby.";
       return;
@@ -193,15 +265,15 @@ $("#checkout-form").addEventListener("submit", async (e) => {
       zip: $("#co-bzip").value.trim(),
       country: $("#co-bcountry").value.trim(),
     },
-    // For a ParcelShop order the delivery address is the shop's, not the
-    // customer's — GLS require the label and the data to name the shop,
-    // and it keeps invoices and e-mails showing where the parcel is
-    // actually going without any of them knowing about ParcelShops.
-    shipping: shippingMethod === "gls_parcelshop"
+    // For a pickup-point order the delivery address is the point's, not the
+    // customer's — GLS require the label and the data to name the shop, and
+    // it keeps invoices and e-mails showing where the parcel is actually
+    // going without any of them knowing pickup points exist.
+    shipping: needsPickupPoint(shippingMethod)
       ? {
-          street: selectedParcelShop.address,
-          city: selectedParcelShop.city,
-          zip: selectedParcelShop.zipcode,
+          street: selectedPickupPoint.street,
+          city: selectedPickupPoint.city,
+          zip: selectedPickupPoint.zip,
           country: "Česká republika",
         }
       : sameAddress
@@ -219,8 +291,8 @@ $("#checkout-form").addEventListener("submit", async (e) => {
           },
     shippingMethod,
     paymentMethod,
-    pickupPoint: shippingMethod === "gls_parcelshop"
-      ? { id: selectedParcelShop.id, name: selectedParcelShop.name }
+    pickupPoint: needsPickupPoint(shippingMethod)
+      ? { id: selectedPickupPoint.id, name: selectedPickupPoint.name }
       : null,
     items: cartLineItems,
     notes: $("#co-notes").value.trim(),

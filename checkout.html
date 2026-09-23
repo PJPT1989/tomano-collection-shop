@@ -74,11 +74,14 @@
           <label><input type="radio" name="shipping-method" value="ceska_posta"> Česká pošta</label>
         </div>
 
-        <div id="parcelshop-picker" style="display:none; margin-top:14px;">
-          <div id="parcelshop-selected" class="parcelshop-selected">Vyberte prosím výdejní místo na mapě níže.</div>
-          <!-- src is set only once the option is chosen, so the GLS map
-               isn't loaded for every visitor who never picks a ParcelShop. -->
-          <iframe id="gls-map" title="Mapa výdejních míst GLS" class="parcelshop-map"></iframe>
+        <!-- Shared by both pickup-point carriers: the chosen point is shown
+             the same way whichever picker produced it. -->
+        <div id="pickup-picker" style="display:none; margin-top:14px;">
+          <div id="pickup-selected" class="pickup-selected"></div>
+          <!-- src is set only once GLS pickup is chosen, so the map isn't
+               loaded for every visitor who never picks a ParcelShop. -->
+          <iframe id="gls-map" title="Mapa výdejních míst GLS" class="parcelshop-map" style="display:none;"></iframe>
+          <button type="button" id="packeta-pick-btn" class="btn detail" style="display:none;">Vybrat výdejní místo na mapě</button>
         </div>
 
         <h2 style="margin-top:24px;">Způsob platby</h2>
@@ -122,6 +125,7 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://widget.packeta.com/v6/www/js/library.js"></script>
 <script src="js/supabase-client.js"></script>
 <script src="js/currency.js"></script>
 <script src="js/products.js"></script>

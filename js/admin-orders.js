@@ -110,9 +110,12 @@ async function updateOrderStatus(id, status) {
   if (o) o.status = status;
 
   // Moving an order into processing is the point at which it's actually
-  // being packed, so that's when the carrier is told about it.
-  if (status === "in_progress" && o?.shipping_method === "zasilkovna" && o?.pickup_point_id) {
-    await createPacketaShipment(id);
+  // being packed, so that's when the carrier is told about it. Pickup-point
+  // methods without a point are skipped rather than failed — an admin can
+  // create those by hand in the carrier's own system.
+  const needsPoint = ["zasilkovna", "gls_parcelshop"].includes(o?.shipping_method);
+  if (status === "in_progress" && o && (!needsPoint || o.pickup_point_id)) {
+    await handOverToCarrier(id, o.shipping_method);
   }
 }
 
@@ -128,13 +131,23 @@ function showOrderActionStatus(message, kind) {
   el.style.color = kind === "error" ? "#c0392b" : "#1e7e45";
 }
 
-// The function refuses to create a second packet for an order that already
-// has one, so flipping an order back and forth through "Zpracovává se"
-// can't produce duplicate consignments.
-async function createPacketaShipment(orderId) {
-  showOrderActionStatus("Předávám zásilku Zásilkovně…", "info");
+// Which function hands an order to which carrier. Both carriers behave
+// identically from here: one call, one shipment row, and a refusal to
+// create a second consignment for an order that already has one — so
+// flipping an order back and forth through "Zpracovává se" is harmless.
+const CARRIER_HANDOVER = {
+  zasilkovna: { endpoint: "packeta-create-packet", name: "Zásilkovně" },
+  gls: { endpoint: "gls-create-label", name: "GLS" },
+  gls_parcelshop: { endpoint: "gls-create-label", name: "GLS" },
+};
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/packeta-create-packet`, {
+async function handOverToCarrier(orderId, shippingMethod) {
+  const carrier = CARRIER_HANDOVER[shippingMethod];
+  if (!carrier) return;
+
+  showOrderActionStatus(`Předávám zásilku ${carrier.name}…`, "info");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${carrier.endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
     body: JSON.stringify({ orderId }),
@@ -142,7 +155,7 @@ async function createPacketaShipment(orderId) {
   const result = await res.json();
 
   if (!res.ok) {
-    showOrderActionStatus("Předání Zásilkovně selhalo: " + (result.error || res.statusText), "error");
+    showOrderActionStatus(`Předání ${carrier.name} selhalo: ` + (result.error || res.statusText), "error");
     return;
   }
   if (result.alreadyExisted) {
@@ -150,19 +163,27 @@ async function createPacketaShipment(orderId) {
     return;
   }
 
-  showOrderActionStatus(`Zásilka předána Zásilkovně. Číslo zásilky: ${result.shipment.tracking_number}`, "info");
+  const labelNote = result.labelStored === false
+    ? " Štítek se nepodařilo uložit — vytiskněte jej z portálu dopravce."
+    : "";
+  showOrderActionStatus(
+    `Zásilka předána ${carrier.name}. Číslo zásilky: ${result.shipment.tracking_number}.${labelNote}`, "info");
   loadOrders();
 }
 
 async function deleteOrder(id, orderNumber) {
   if (!confirm(`Opravdu smazat objednávku #${orderNumber}? Tuto akci nelze vrátit zpět.`)) return;
 
-  // Order items/shipments/invoices cascade-delete at the DB level, but the
-  // invoice's PDF file in storage does not — remove it first or it becomes
-  // an orphaned file with no row pointing at it.
+  // Order items/shipments/invoices cascade-delete at the DB level, but
+  // their files in storage do not — remove those first or they become
+  // orphans with no row pointing at them.
   const { data: invoice } = await supabaseClient.from("invoices").select("pdf_url").eq("order_id", id).maybeSingle();
   if (invoice?.pdf_url) {
     await supabaseClient.storage.from("invoices").remove([invoice.pdf_url]);
+  }
+  const { data: shipment } = await supabaseClient.from("shipments").select("label_url").eq("order_id", id).maybeSingle();
+  if (shipment?.label_url) {
+    await supabaseClient.storage.from("labels").remove([shipment.label_url]);
   }
 
   const { error } = await supabaseClient.from("orders").delete().eq("id", id);
@@ -248,6 +269,10 @@ async function openOrderDetail(id) {
       <p><strong>${escapeHtml(SHIPPING_LABELS[order.shipping_method] || order.shipping_method)}</strong>
       &middot; číslo zásilky ${escapeHtml(shipment.tracking_number || "—")}
       &middot; předáno ${new Date(shipment.created_at).toLocaleDateString("cs-CZ")}</p>
+      ${shipment.label_url
+        ? `<button class="btn detail" onclick="downloadLabel(${escapeAttr(JSON.stringify(shipment.label_url))})">Stáhnout štítek</button>
+           <span id="label-status" style="margin-left:10px; font-size:13px; color:#888;"></span>`
+        : `<p style="color:#888; font-size:13px;">Štítek není uložen — vytiskněte jej z portálu dopravce.</p>`}
     ` : ""}
 
     <div class="admin-section-divider"></div>
@@ -300,6 +325,25 @@ async function downloadInvoice(invoiceId, path) {
   // the await risks being blocked as a popup in some browsers.
   const win = window.open("", "_blank");
   const { data, error } = await supabaseClient.storage.from("invoices").createSignedUrl(path, 300);
+  if (error) {
+    if (win) win.close();
+    statusEl.textContent = "Chyba: " + error.message;
+    return;
+  }
+  if (win) {
+    win.location.href = data.signedUrl;
+  } else {
+    statusEl.textContent = "Prohlížeč zablokoval otevření okna — povolte vyskakovací okna pro tuto stránku.";
+  }
+}
+
+// Same popup-blocker dance as the invoice download: the window has to be
+// opened inside the click's user gesture, before awaiting the signed URL.
+async function downloadLabel(path) {
+  const statusEl = $("#label-status");
+  statusEl.textContent = "";
+  const win = window.open("", "_blank");
+  const { data, error } = await supabaseClient.storage.from("labels").createSignedUrl(path, 300);
   if (error) {
     if (win) win.close();
     statusEl.textContent = "Chyba: " + error.message;

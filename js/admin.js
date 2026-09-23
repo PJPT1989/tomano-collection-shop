@@ -343,9 +343,16 @@ $("#product-form").addEventListener("submit", async (e) => {
     if (file) {
       const ext = file.name.split(".").pop();
       const path = `${id}-${Date.now()}.${ext}`;
+      // No upsert: the path already carries a timestamp, so it is unique by
+      // construction and there is never an existing object to replace.
+      // Asking for upsert made this an INSERT ... ON CONFLICT DO UPDATE,
+      // which storage's row level security rejected outright — and because
+      // the image is uploaded before the product row is written, the
+      // failure surfaced as "new row violates row-level security policy"
+      // and read like a problem with the products table.
       const { error: uploadError } = await supabaseClient.storage
         .from("product-images")
-        .upload(path, file, { upsert: true });
+        .upload(path, file);
       if (uploadError) throw uploadError;
       const { data: pub } = supabaseClient.storage.from("product-images").getPublicUrl(path);
       imgPath = pub.publicUrl;

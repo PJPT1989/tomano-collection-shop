@@ -5,19 +5,13 @@ tomano.cz is planned for around late October 2026.
 
 ## Before cutover
 
-**Move hosting off GitHub Pages.** The shop currently serves from
-`pjpt1989.github.io/tomano-collection-shop`, but GitHub's terms forbid
-using Pages to run an online business or e-commerce site, so it can't be
-the permanent home. Cloudflare Pages is the intended replacement: free,
-commercial use permitted, deploys from this same repo on push, and it
-supports a redirects file. Point a subdomain at it first and run the whole
-shop there before switching the apex — changing `tomano.cz` itself *is*
-the cutover.
-
-**Point `SHOP_BASE_URL` at the real domain.** It still says
-`http://localhost:8533`. Until it changes, the Heureka feed advertises
-product and image URLs that don't resolve, and the GoPay return page can't
-work for a real customer.
+**Point the apex at Cloudflare.** Hosting has moved: the shop runs on
+Cloudflare Pages, reachable at `new.tomano.cz`, and GitHub Pages is
+disabled — its terms forbid running an e-commerce site on it. What remains
+is switching `tomano.cz` itself, which *is* the cutover moment. Afterwards
+`SHOP_BASE_URL` needs updating from `new.tomano.cz` to the apex, or the
+Heureka feed and the GoPay return page keep pointing at the staging
+subdomain.
 
 **Swap GoPay to production.** `GOPAY_API_BASE` from
 `gw.sandbox.gopay.com/api` to `gate.gopay.cz/api`, plus the production
@@ -33,11 +27,10 @@ validates the feed on submission, which is also the definitive answer to
 whether the `Content-Type: text/plain` that Supabase forces on the
 response bothers them. It probably doesn't — importers parse the body.
 
-**Delete the test orders and restore stock.** Orders `2026000101`,
-`2026000102` and `2026000103` are test data holding stock. Afterwards:
-Teenage Mutant Ninja Turtles Play Booster Box back to 2, Lorwyn Eclipsed
-Collector back to 10. Deleting an order also removes its invoice and label
-from storage.
+**Delete the test orders and restore stock.** Orders `2026000101` to
+`2026000104` are test data holding stock. Afterwards: Teenage Mutant Ninja
+Turtles Play Booster Box back to 2, Lorwyn Eclipsed Collector back to 10.
+Deleting an order also removes its invoice and label from storage.
 
 ## Data to fill in
 
@@ -104,3 +97,20 @@ only start to pay near 5 kg, which is about five draft boxes.
 numbers the old shop had already issued this year, and falls back to 1
 from 2027. The 2026 special case expires by itself — it is not an
 arbitrary offset to be tidied away.
+
+**Prices and marketplace links come from MTGStocks' undocumented API.**
+It is free, unauthenticated, and genuinely live, which the paid API it
+replaced was not. But there are no terms granting use, so it could change
+or start refusing us — if prices stop updating, check that first. Two
+non-obvious constraints it imposes: they send no CORS headers, so it can
+only be called from an Edge Function, never from the browser; and they
+reject requests whose User-Agent looks automated, returning HTML instead
+of JSON. Their URLs also arrive carrying MTGStocks' affiliate and
+referrer parameters, which are deliberately stripped.
+
+**The link finder is a picker, not an automatic match.** This shop says
+"Play Booster Box", MTGStocks says "Play Booster Display", older sets say
+"Draft Booster Box", and every set also offers a "Display Case". A rule
+equating those would eventually attach the wrong product — and a wrong
+link is worse than a missing one, because nobody clicks their own links
+to check.

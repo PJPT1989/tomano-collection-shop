@@ -25,9 +25,22 @@ const PACKETA_API_PASSWORD = Deno.env.get("PACKETA_API_PASSWORD")!;
 // The <eshop> field. Comes from Client section -> Sender -> Indication;
 // packet creation is rejected without a value Packeta recognises.
 const PACKETA_SENDER_INDICATION = Deno.env.get("PACKETA_SENDER_INDICATION")!;
-// Optional. Packeta price by weight, so send it when known rather than
-// inventing a number — left out of the request entirely when unset.
-const PACKETA_DEFAULT_WEIGHT_KG = Deno.env.get("PACKETA_DEFAULT_WEIGHT_KG");
+// Weight comes from the products themselves rather than a configured
+// constant: a collector box is around 400 g and a draft box around 1100 g,
+// and Packeta price in bands, so one figure for everything would be wrong
+// in a way that costs money on every order.
+//
+// Used only when an order line's product has since been deleted, which
+// nulls product_id and leaves nothing to read a weight from. Matches the
+// column default.
+const FALLBACK_ITEM_WEIGHT_G = 1000;
+
+// Outer box and padding, added once per parcel rather than per item —
+// three boxes still ship in one carton. Deliberately generous: Zásilkovna
+// charge one flat rate up to 5 kg, so an over-estimate costs nothing on a
+// normal order, while an under-estimate risks a reweigh. Adjust here if a
+// packed parcel on the scale says otherwise.
+const PACKAGING_WEIGHT_G = 300;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -97,6 +110,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ shipment: existing, alreadyExisted: true });
     }
 
+    const { data: items } = await supabase
+      .from("order_items").select("qty, products(weight_g)").eq("order_id", orderId);
+    const contentsGrams = (items || []).reduce(
+      (sum, it) => sum + (it.products?.weight_g ?? FALLBACK_ITEM_WEIGHT_G) * it.qty, 0);
+    const weightKg = Math.round(((contentsGrams + PACKAGING_WEIGHT_G) / 1000) * 100) / 100;
+
     const [firstName, ...restOfName] = String(order.customer_name).trim().split(/\s+/);
     // Cash on delivery carries the amount to collect; anything already paid
     // online must go out as zero or the customer is charged twice.
@@ -112,7 +131,7 @@ Deno.serve(async (req) => {
       `<cod>${cod}</cod>`,
       `<value>${order.total_czk}</value>`,
       `<currency>CZK</currency>`,
-      PACKETA_DEFAULT_WEIGHT_KG ? `<weight>${xmlEscape(PACKETA_DEFAULT_WEIGHT_KG)}</weight>` : "",
+      `<weight>${weightKg}</weight>`,
       `<eshop>${xmlEscape(PACKETA_SENDER_INDICATION)}</eshop>`,
     ].filter(Boolean).join("");
 

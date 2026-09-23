@@ -1,47 +1,51 @@
 // Supabase Edge Function: fetch-prices
 //
-// Runs once a day (via a pg_cron schedule, see supabase/setup/price-history-cron.sql).
-// For every product in the `products` table, looks up its TCGPlayer product id
-// (parsed from the "TCG Player" link already stored on the product), fetches
-// today's market price from the tcgapi.dev API, and appends one row to
-// `price_history`. Never touches anything client-side — the TCGAPI_KEY secret
-// and the service-role key only ever live inside this function's environment.
+// Runs once a day via pg_cron (see price-history-cron.sql) and appends one
+// market-price snapshot per product to `price_history`, which the chart on
+// the product page reads.
+//
+// Prices come from MTGStocks, keyed on products.mtgstocks_id. This replaced
+// a paid per-request API that was returning the same value for every
+// product on every day — 26 products, zero variation over days, which is
+// not something real market prices do. Worth remembering if these figures
+// ever go flat again: that is the symptom to look for, and comparing two
+// days of rows is the way to spot it.
+//
+// Keyed on a stored id rather than an id parsed out of the product's
+// TCGplayer link, as it used to be — that silently skipped every product
+// whose links hadn't been filled in yet.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TCGAPI_KEY = Deno.env.get("TCGAPI_KEY")!;
-
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-function extractTcgplayerId(links: { text: string; href: string }[] | null): number | null {
-  if (!links) return null;
-  for (const link of links) {
-    const match = link.href?.match(/tcgplayer\.com\/product\/(\d+)/);
-    if (match) return parseInt(match[1], 10);
-  }
-  return null;
-}
+// MTGStocks refuse requests that look automated — a plain "Mozilla/5.0"
+// gets an HTML error page instead of JSON, which would otherwise look like
+// an outage rather than a rejection.
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-async function fetchMarketPrice(tcgplayerId: number): Promise<number | null> {
-  const res = await fetch(`https://api.tcgapi.dev/v1/cards/tcgplayer/${tcgplayerId}`, {
-    headers: { "X-API-Key": TCGAPI_KEY },
+async function fetchMarketPrice(mtgstocksId: number): Promise<number | null> {
+  const res = await fetch(`https://api.mtgstocks.com/sealed/${mtgstocksId}`, {
+    headers: { "User-Agent": USER_AGENT, "Accept": "application/json" },
   });
-  if (!res.ok) {
-    throw new Error(`tcgapi.dev returned ${res.status} for tcgplayer id ${tcgplayerId}`);
-  }
+  if (!res.ok) throw new Error(`MTGStocks vrátil ${res.status} pro id ${mtgstocksId}`);
+
   const body = await res.json();
-  const prices = body?.data?.prices ?? [];
-  const sealed = prices.find((p: { printing: string }) => p.printing === "Sealed");
-  const chosen = sealed ?? prices[0];
-  return typeof chosen?.market_price === "number" ? chosen.market_price : null;
+  // `market` is the figure their own product page headlines. `average` is
+  // the mean of current listings, which reacts to a single optimistic
+  // seller; market is derived from what actually sold.
+  const price = body?.latestPrice?.market;
+  return typeof price === "number" ? price : null;
 }
 
 Deno.serve(async () => {
   const { data: products, error } = await supabase
     .from("products")
-    .select("id, links");
+    .select("id, mtgstocks_id")
+    .not("mtgstocks_id", "is", null);
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
@@ -50,31 +54,25 @@ Deno.serve(async () => {
   const results: { id: string; status: string; price?: number }[] = [];
 
   for (const product of products) {
-    const tcgplayerId = extractTcgplayerId(product.links);
-    if (!tcgplayerId) {
-      results.push({ id: product.id, status: "skipped: no TCGPlayer link" });
-      continue;
-    }
-
     try {
-      const price = await fetchMarketPrice(tcgplayerId);
+      const price = await fetchMarketPrice(product.mtgstocks_id);
       if (price == null) {
-        results.push({ id: product.id, status: "skipped: no market_price in response" });
+        results.push({ id: product.id, status: "skipped: no market price" });
         continue;
       }
 
       const { error: insertError } = await supabase
         .from("price_history")
         .insert({ product_id: product.id, price, currency: "USD" });
-
       if (insertError) throw insertError;
+
       results.push({ id: product.id, status: "ok", price });
     } catch (err) {
       results.push({ id: product.id, status: `error: ${(err as Error).message}` });
     }
 
-    // Be polite to the upstream API between requests.
-    await new Promise((r) => setTimeout(r, 300));
+    // Be polite to an API that owes us nothing.
+    await new Promise((r) => setTimeout(r, 400));
   }
 
   return new Response(JSON.stringify({ results }, null, 2), {

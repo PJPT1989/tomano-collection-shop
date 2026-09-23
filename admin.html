@@ -104,8 +104,23 @@
         </div>
 
         <h3 style="margin-top:20px;">Odkazy (TCG Player, Cardmarket, ...)</h3>
+
+        <div class="link-finder">
+          <div class="link-finder-row">
+            <input type="text" id="link-search" placeholder="Název edice, např. Bloomburrow nebo BLB">
+            <button type="button" id="link-search-btn" class="btn detail">Najít odkazy</button>
+          </div>
+          <div id="link-search-status"></div>
+          <div id="link-search-results"></div>
+        </div>
+
         <div id="links-editor"></div>
         <button type="button" id="add-link-btn" class="btn detail" style="margin-top:8px;">+ Přidat odkaz</button>
+
+        <label style="display:block; margin-top:14px;">MTGStocks ID<br>
+          <input type="number" id="field-mtgstocks" min="0" style="max-width:200px;"><br>
+          <span style="font-size:12px; color:#888;">Vyplní se automaticky výběrem výše. Slouží k dennímu načítání ceny pro graf.</span>
+        </label>
 
         <div style="margin-top:24px; display:flex; gap:10px;">
           <button type="submit" id="save-btn" class="btn buy">Uložit</button>

@@ -305,6 +305,24 @@ a { text-decoration: none; color: inherit; }
 .btn.detail:hover { background: #d3d3d3; }
 .btn.danger { background: #fdecea; color: #c0392b; }
 .btn.danger:hover { background: #f9d3ce; }
+.link-finder {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fafafa;
+}
+.link-finder-row { display: flex; gap: 8px; }
+.link-finder-row input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+#link-search-status { font-size: 13px; color: #888; margin-top: 8px; }
+.link-finder-set { font-weight: 600; font-size: 13px; margin: 10px 0 4px; }
+.link-finder-pick { margin: 0 6px 6px 0; }
+
 .pickup-selected {
   padding: 10px 12px;
   border: 1px solid var(--border);

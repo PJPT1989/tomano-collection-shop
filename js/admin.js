@@ -145,6 +145,102 @@ $("#add-link-btn").addEventListener("click", () => {
   $("#links-editor").appendChild(emptyLinkRow());
 });
 
+// ---------- Link finder ----------
+//
+// Looks a product up on MTGStocks and fills in all three marketplace links
+// at once. Goes through an Edge Function rather than calling MTGStocks
+// directly: they send no CORS headers, so the browser cannot reach them.
+//
+// Deliberately a picker rather than an automatic match. This shop calls a
+// product "Play Booster Box"; MTGStocks calls the same thing "Play Booster
+// Display", and older sets say "Draft Booster Box". Any rule treating those
+// as equivalent will eventually choose "Display Case" instead of "Display",
+// and a wrong link is worse than no link because nobody notices it.
+
+const LINK_LABELS = { tcgplayer: "TCG Player", cardmarket: "Cardmarket", mtgstocks: "Price History" };
+
+function setLinkFinderStatus(message, isError) {
+  const el = $("#link-search-status");
+  el.textContent = message || "";
+  el.style.color = isError ? "#c0392b" : "#888";
+}
+
+async function callMtgstocksLookup(payload) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/mtgstocks-lookup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || res.statusText);
+  return result;
+}
+
+$("#link-search-btn").addEventListener("click", async () => {
+  const query = $("#link-search").value.trim();
+  const results = $("#link-search-results");
+  results.innerHTML = "";
+
+  if (query.length < 2) {
+    setLinkFinderStatus("Zadejte prosím alespoň dva znaky.", true);
+    return;
+  }
+
+  setLinkFinderStatus("Hledám…");
+  try {
+    const { sets } = await callMtgstocksLookup({ search: query });
+    if (!sets.length) {
+      setLinkFinderStatus("Nic nenalezeno. Zkuste jiný název edice.", true);
+      return;
+    }
+
+    setLinkFinderStatus("Vyberte správný produkt:");
+    for (const set of sets) {
+      const heading = document.createElement("div");
+      heading.className = "link-finder-set";
+      heading.textContent = `${set.setName} (${set.abbreviation})`;
+      results.appendChild(heading);
+
+      for (const product of set.products) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn detail link-finder-pick";
+        btn.textContent = product.name;
+        btn.addEventListener("click", () => applyMtgstocksProduct(product.id));
+        results.appendChild(btn);
+      }
+    }
+  } catch (err) {
+    setLinkFinderStatus("Vyhledávání selhalo: " + err.message, true);
+  }
+});
+
+async function applyMtgstocksProduct(mtgstocksId) {
+  setLinkFinderStatus("Načítám odkazy…");
+  try {
+    const product = await callMtgstocksLookup({ id: mtgstocksId });
+
+    // Replace only the links we manage, so anything else added by hand
+    // survives being re-run.
+    const managed = new Set(Object.values(LINK_LABELS));
+    Array.from(document.querySelectorAll("#links-editor .link-edit-row")).forEach(row => {
+      if (managed.has(row.querySelector(".link-text").value.trim())) row.remove();
+    });
+
+    for (const [key, label] of Object.entries(LINK_LABELS)) {
+      const href = product.links[key];
+      if (href) $("#links-editor").appendChild(emptyLinkRow(label, href));
+    }
+
+    $("#field-mtgstocks").value = product.id;
+    $("#link-search-results").innerHTML = "";
+    const price = product.marketPrice != null ? `, aktuální cena $${product.marketPrice}` : "";
+    setLinkFinderStatus(`Doplněno: ${product.setName} — ${product.name}${price}`);
+  } catch (err) {
+    setLinkFinderStatus("Načtení odkazů selhalo: " + err.message, true);
+  }
+}
+
 function collectLinks() {
   return Array.from(document.querySelectorAll("#links-editor .link-edit-row")).map(row => ({
     text: row.querySelector(".link-text").value.trim(),
@@ -162,6 +258,8 @@ function openAddForm() {
   $("#field-vat").value = defaultVat ? defaultVat.id : "";
   $("#field-position").value = 0;
   $("#links-editor").innerHTML = "";
+  $("#link-search-results").innerHTML = "";
+  setLinkFinderStatus("");
   $("#image-preview").style.display = "none";
   updatePricePreview();
   $("#form-panel").style.display = "block";
@@ -203,6 +301,7 @@ async function openEditForm(id) {
   $("#field-position").value = p.position || 0;
   $("#field-ean").value = p.ean || "";
   $("#field-weight").value = p.weight_g ?? 1000;
+  $("#field-mtgstocks").value = p.mtgstocks_id ?? "";
   $("#field-desc").value = p.description || "";
   $("#field-image").value = "";
   updatePricePreview();
@@ -268,6 +367,9 @@ $("#product-form").addEventListener("submit", async (e) => {
       // Column is NOT NULL, so fall back rather than writing null when the
       // field is cleared.
       weight_g: parseInt($("#field-weight").value, 10) || 1000,
+      // Null rather than 0 when absent — the price job selects on "not
+      // null", and a zero would send it looking up a product that isn't there.
+      mtgstocks_id: parseInt($("#field-mtgstocks").value, 10) || null,
       img: imgPath,
       description: $("#field-desc").value,
       links: collectLinks()

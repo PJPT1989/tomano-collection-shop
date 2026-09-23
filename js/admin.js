@@ -201,6 +201,7 @@ async function openEditForm(id) {
   $("#field-stock").value = p.stock;
   $("#field-vat").value = p.vat_rate_id || "";
   $("#field-position").value = p.position || 0;
+  $("#field-ean").value = p.ean || "";
   $("#field-desc").value = p.description || "";
   $("#field-image").value = "";
   updatePricePreview();
@@ -260,6 +261,9 @@ $("#product-form").addEventListener("submit", async (e) => {
       stock: parseInt($("#field-stock").value, 10),
       vat_rate_id: vatValue ? parseInt(vatValue, 10) : null,
       position: parseInt($("#field-position").value, 10) || 0,
+      // Stored null rather than "" when absent, so the feed can tell
+      // "no EAN" from "an empty one" and omit the element entirely.
+      ean: $("#field-ean").value.trim() || null,
       img: imgPath,
       description: $("#field-desc").value,
       links: collectLinks()

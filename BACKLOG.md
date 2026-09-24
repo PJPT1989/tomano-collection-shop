@@ -56,6 +56,14 @@ order items, invoices, shipments and products as JSON on a daily cron,
 written to a Google Drive folder set up for the purpose. Recovery would be
 schema from this repo's `.sql` files plus that JSON.
 
+That recovery path is only true as of the grants added alongside
+`products-schema.sql`. From 2026-10-30 Supabase stops granting Data API
+access to newly created tables, so a rebuild from files lacking `grant`
+statements produces tables that are correct in every visible way and
+unreachable through the API. Any future migration that creates a table
+must carry its own grants, or it breaks the rebuild without breaking
+anything you would notice at the time.
+
 **Packeta label PDF.** GLS labels are fetched and stored so they print
 from admin; Packeta's aren't, so those still have to be printed from their
 portal. `packetLabelPdf` would close the gap.

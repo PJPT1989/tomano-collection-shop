@@ -9,6 +9,18 @@ create table if not exists vat_rates (
   rate numeric not null
 );
 
+-- Grants are separate from row level security and both are required. From
+-- 2026-10-30 Supabase no longer adds them to newly created tables, so
+-- without these a rebuild from this file leaves the table unreachable
+-- through the Data API however its policies are written.
+--
+-- anon gets select because product queries join the rate through to the
+-- shop front; managing the rates themselves is admin-only.
+grant select on vat_rates to anon;
+grant select, insert, update, delete on vat_rates to authenticated;
+grant select, insert, update, delete on vat_rates to service_role;
+grant usage, select on sequence vat_rates_id_seq to authenticated, service_role;
+
 alter table vat_rates enable row level security;
 
 create policy "Public can read vat rates"

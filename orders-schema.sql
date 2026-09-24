@@ -94,3 +94,28 @@ create policy "Admin can write shipments" on shipments for all
 create policy "Admin can read invoices" on invoices for select using (auth.role() = 'authenticated');
 create policy "Admin can write invoices" on invoices for all
   using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- Grants are a separate layer from the policies above and both are
+-- required. From 2026-10-30 Supabase stops adding them automatically to
+-- newly created tables, so without these a rebuild from this file would
+-- produce tables that look correct and are unreachable through the API,
+-- failing every query with "permission denied".
+--
+-- No anon grants deliberately: nothing about an order should be readable
+-- without logging in. Checkout writes through the create-order Edge
+-- Function, which uses the service-role key.
+
+grant select, insert, update, delete on orders to authenticated;
+grant select, insert, update, delete on order_items to authenticated;
+grant select, insert, update, delete on shipments to authenticated;
+grant select, insert, update, delete on invoices to authenticated;
+
+grant select, insert, update, delete on orders to service_role;
+grant select, insert, update, delete on order_items to service_role;
+grant select, insert, update, delete on shipments to service_role;
+grant select, insert, update, delete on invoices to service_role;
+
+grant usage, select on sequence orders_id_seq to authenticated, service_role;
+grant usage, select on sequence order_items_id_seq to authenticated, service_role;
+grant usage, select on sequence shipments_id_seq to authenticated, service_role;
+grant usage, select on sequence invoices_id_seq to authenticated, service_role;

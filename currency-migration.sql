@@ -16,6 +16,17 @@ create policy "Public can read exchange rates"
   on exchange_rates for select
   using (true);
 
+-- Grants are separate from the policy above and both are required. From
+-- 2026-10-30 Supabase no longer adds them to newly created tables, so
+-- without these a rebuild from this file leaves the table unreachable
+-- through the Data API.
+--
+-- anon needs select because every page converts prices using the daily
+-- rate. Writes come only from the fetch-exchange-rate Edge Function.
+grant select on exchange_rates to anon, authenticated;
+grant select, insert, update, delete on exchange_rates to service_role;
+grant usage, select on sequence exchange_rates_id_seq to service_role;
+
 alter table products add column if not exists price_currency text not null default 'CZK'
   check (price_currency in ('CZK', 'EUR'));
 

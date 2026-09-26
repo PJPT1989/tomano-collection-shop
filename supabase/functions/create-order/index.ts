@@ -173,8 +173,8 @@ Deno.serve(async (req) => {
     }
 
     // Queue the supplier lines. A failure here must not fail the customer's
-    // order (it already exists); the admin copy of the order e-mail still
-    // arrives, and the missing queue entry shows in admin.
+    // order (it already exists); it is logged, and in admin the order then
+    // has no "Objednávka u dodavatele" section - order those boxes by hand.
     if (supplierLines.length) {
       const { error: queueError } = await supabase
         .from("supplier_order_items")

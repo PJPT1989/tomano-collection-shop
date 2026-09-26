@@ -447,6 +447,41 @@ the category's default weight when a new product is added.
 **New products go on top of their category** (the others shift down by one).
 Temporary - the plan is to sort by release date.
 
+## Products mirrored from the distributor
+
+Designed 2026-09-26, being built. The supplier bot's side (and the full
+reasoning) is in the watcher repo's DECISIONS.md, section 11.
+
+**The shop also offers boxes the owner doesn't physically have**, straight
+from Černý Rytíř's in-stock Magic booster boxes, with the new status
+**"Skladem u dodavatele – odesíláme do 5–7 pracovních dnů"**. The bot syncs
+them every 2 minutes: creates new ones, sets stock (the distributor's,
+minus customer orders not yet placed there, at most 6) and price (the
+distributor's + 10 %, overwriting manual edits), and hides products the
+distributor no longer lists.
+
+**Such products are marked `supplier_managed`, and the bot can change only
+those.** Everything the owner created or stocks is off-limits, even at
+stock 0. When the owner buys one of these boxes through the want list, the
+product becomes theirs: stock = what was bought, no longer managed.
+
+**Hidden products** (`hidden`) are left out of category pages and the
+Heureka feed; the product page says they're unavailable and can't be added
+to the cart. Checkout refuses them too.
+
+**Customer orders are never slowed down by the distributor.** Checkout
+works as before; for supplier-managed items it also writes a row to a queue
+(`supplier_order_items`), which the bot polls and places at the distributor
+in the background, as soon as possible whatever the payment method. The
+queue row carries the distributor's order ID or what went wrong, shown in
+admin. The bot reads only order number, product and quantity - never
+customer data.
+
+**The bot's access stays narrow**: the create-only `supplier-product`
+function, plus a `supplier-sync` function that can update only
+supplier-managed products and read/update the queue. Both behind
+`SUPPLIER_PRODUCT_TOKEN`.
+
 ## E-mail and invoices
 
 **E-mail goes through Resend**, from `objednavky@objednavky.tomano.cz`.

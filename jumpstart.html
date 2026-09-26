@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Produkt - Tomano Collection</title>
+<title>Jumpstart boxes - Tomano Collection</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body data-category="jumpstart">
 
 <div class="topbar">
   <div class="container">
@@ -37,13 +37,21 @@
     <a href="draft.html">Booster boxes for draft</a>
     <a href="collector.html">Collector booster boxes</a>
     <a href="set.html">Set Booster boxes</a>
-    <a href="jumpstart.html">Jumpstart boxes</a>
+    <a href="jumpstart.html" class="active">Jumpstart boxes</a>
   </div>
 </div>
 
 <div class="container">
-  <div class="breadcrumb"><a href="index.html">Domů</a> / Detail produktu</div>
-  <div class="product-detail" id="product-detail"></div>
+  <div class="breadcrumb"><a href="index.html">Domů</a> / Jumpstart boxes</div>
+  <h1 class="page-title">Jumpstart boxes (<span id="item-count">0</span>)</h1>
+
+  <div class="sortbar">
+    <button data-sort="cheap">NEJLEVNĚJŠÍ</button>
+    <button data-sort="expensive">NEJDRAŽŠÍ</button>
+    <button data-sort="az">ABECEDNĚ</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
 </div>
 
 <footer>
@@ -54,7 +62,6 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="js/supabase-client.js"></script>
 <script src="js/currency.js"></script>
 <script src="js/products.js"></script>

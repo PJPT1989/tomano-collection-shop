@@ -26,5 +26,6 @@ update products set weight_g = case cat
   when 'collector' then 400
   when 'draft' then 1100
   when 'set' then 900
+  when 'jumpstart' then 800
   else 1000
 end;

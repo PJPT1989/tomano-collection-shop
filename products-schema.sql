@@ -24,7 +24,7 @@
 
 create table if not exists products (
   id text primary key,
-  cat text not null,                    -- 'draft' | 'collector' | 'set'
+  cat text not null,                    -- 'draft' | 'collector' | 'set' | 'jumpstart'
   name text not null,
   price numeric not null,               -- widened from integer by currency-migration.sql
   eur integer,                          -- deprecated; EUR is computed live from price + rate

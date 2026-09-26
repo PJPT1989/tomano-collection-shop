@@ -59,6 +59,7 @@
       <button data-cat="draft">Draft</button>
       <button data-cat="collector">Collector</button>
       <button data-cat="set">Set</button>
+      <button data-cat="jumpstart">Jumpstart</button>
     </div>
 
     <table class="cart-table admin-table">
@@ -78,6 +79,7 @@
               <option value="draft">Draft</option>
               <option value="collector">Collector</option>
               <option value="set">Set</option>
+              <option value="jumpstart">Jumpstart</option>
             </select>
           </label>
           <label class="span-2">Název<br><input type="text" id="field-name" required></label>
@@ -101,7 +103,7 @@
           </label>
           <label>Pozice v seznamu<br><input type="number" id="field-position" min="0" value="0"></label>
           <label>EAN (čárový kód)<br><input type="text" id="field-ean" inputmode="numeric" pattern="[0-9]*" placeholder="např. 0195166308036"><br><span style="font-size:12px; color:#888;">Nepovinné. Přebírá se z krabice a pomáhá Heurece produkt správně spárovat.</span></label>
-          <label>Hmotnost (g)<br><input type="number" id="field-weight" min="0" step="1" value="1000"><br><span style="font-size:12px; color:#888;">Používá se pro výpočet hmotnosti zásilky u dopravců.</span></label>
+          <label>Hmotnost (g)<br><input type="number" id="field-weight" min="0" step="1" value="1000"><br><span style="font-size:12px; color:#888;">Používá se pro výpočet hmotnosti zásilky u dopravců. U nového produktu se předvyplní podle kategorie.</span></label>
           <label class="span-2">Obrázek<br><input type="file" id="field-image" accept="image/*"></label>
           <div class="span-2"><img id="image-preview" style="display:none; max-width:200px; max-height:200px; margin-top:8px;"></div>
           <label class="span-2">Popis<br><textarea id="field-desc" rows="8"></textarea></label>

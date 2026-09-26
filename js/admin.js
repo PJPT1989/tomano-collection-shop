@@ -1,14 +1,16 @@
 // Admin page logic: product list, add/edit/delete, image upload, VAT rates.
 // Auth/login lives in admin-common.js, shared with admin-orders.js.
 
-const CATEGORY_LABELS = { draft: "Draft", collector: "Collector", set: "Set" };
+const CATEGORY_LABELS = { draft: "Draft", collector: "Collector", set: "Set", jumpstart: "Jumpstart" };
+// Default parcel weight per category (g) - averages, see product-weight-migration.sql.
+const CATEGORY_WEIGHTS = { draft: 1100, collector: 400, set: 900, jumpstart: 800 };
 let editingId = null; // null = creating a new product
 let editingVatId = null; // null = creating a new VAT rate
 let vatRates = [];
 let availabilityStatuses = []; // [{ code, label }] from availability_statuses
 let lastProductRows = [];
 let currentCategoryFilter = "all";
-const CATEGORY_ORDER = ["draft", "collector", "set"];
+const CATEGORY_ORDER = ["draft", "collector", "set", "jumpstart"];
 
 async function initAdminPage() {
   await loadVatRates();
@@ -259,6 +261,7 @@ function openAddForm() {
   const defaultVat = vatRates.find(v => v.name === "21");
   $("#field-vat").value = defaultVat ? defaultVat.id : "";
   $("#field-position").value = 0;
+  $("#field-weight").value = CATEGORY_WEIGHTS[$("#field-cat").value] || 1000;
   $("#field-availability").value = "available";
   $("#field-release").value = "";
   $("#links-editor").innerHTML = "";
@@ -284,6 +287,11 @@ function updatePricePreview() {
 }
 
 $("#field-price").addEventListener("input", updatePricePreview);
+
+// A new product takes its category's default weight; an existing one keeps its own.
+$("#field-cat").addEventListener("change", () => {
+  if (!editingId) $("#field-weight").value = CATEGORY_WEIGHTS[$("#field-cat").value] || 1000;
+});
 $("#field-currency").addEventListener("change", updatePricePreview);
 
 async function openEditForm(id) {

@@ -263,7 +263,8 @@ missing GLS field and an unapproved Zásilkovna account in one attempt each.
 and deliberately errs high.** Zásilkovna charge a single flat rate up to
 5 kg, so on any normal order an over-estimate costs nothing while an
 under-estimate brings a reweigh and a correction invoice. Weights are
-per-category averages — 400 g collector, 1100 g draft, 900 g set — plus
+per-category averages — 400 g collector, 1100 g draft, 900 g set, 800 g
+jumpstart — plus
 300 g of packaging per parcel, not per item.
 
 ### GLS
@@ -438,6 +439,10 @@ English description, translated to Czech by hand in admin afterwards. A case
 ordered from the distributor becomes the box product: stock = 6 × cases,
 price per box = case price / 6 (+10 %), status presale with the distributor's
 release date. Single boxes go straight to `available`.
+
+**Jumpstart boxes are their own category** ("Jumpstart boxes",
+`jumpstart.html`, default weight 800 g), not part of draft. Admin fills in
+the category's default weight when a new product is added.
 
 **New products go on top of their category** (the others shift down by one).
 Temporary - the plan is to sort by release date.

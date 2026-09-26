@@ -29,7 +29,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Images are only ever fetched from the distributor's own image server.
 const IMAGE_HOST = "images.cernyrytir.eu";
-const CATEGORIES = ["draft", "collector", "set"];
+const CATEGORIES = ["draft", "collector", "set", "jumpstart"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function jsonResponse(body: unknown, status = 200) {

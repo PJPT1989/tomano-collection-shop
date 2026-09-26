@@ -5,12 +5,14 @@ const CATEGORY_LABELS = { draft: "Draft", collector: "Collector", set: "Set" };
 let editingId = null; // null = creating a new product
 let editingVatId = null; // null = creating a new VAT rate
 let vatRates = [];
+let availabilityStatuses = []; // [{ code, label }] from availability_statuses
 let lastProductRows = [];
 let currentCategoryFilter = "all";
 const CATEGORY_ORDER = ["draft", "collector", "set"];
 
 async function initAdminPage() {
   await loadVatRates();
+  await loadAvailabilityStatuses();
   await loadProductTable();
 }
 
@@ -53,7 +55,7 @@ function productRowHtml(p, isFirst, isLast) {
       <td>${escapeHtml(p.name)}</td>
       <td>${CATEGORY_LABELS[p.cat] || escapeHtml(p.cat)}</td>
       <td>${priceLabel}</td>
-      <td>${p.stock}</td>
+      <td>${p.stock}${p.availability && p.availability !== "available" ? ` <span style="color:#d35400;">(${escapeHtml(availabilityLabel(p.availability))}${p.release_date ? ", " + escapeHtml(p.release_date) : ""})</span>` : ""}</td>
       <td>
         <button class="btn detail" onclick="openEditForm('${p.id}')">Upravit</button>
       </td>
@@ -257,6 +259,8 @@ function openAddForm() {
   const defaultVat = vatRates.find(v => v.name === "21");
   $("#field-vat").value = defaultVat ? defaultVat.id : "";
   $("#field-position").value = 0;
+  $("#field-availability").value = "available";
+  $("#field-release").value = "";
   $("#links-editor").innerHTML = "";
   $("#link-search-results").innerHTML = "";
   setLinkFinderStatus("");
@@ -297,6 +301,8 @@ async function openEditForm(id) {
   $("#field-currency").value = p.price_currency || "CZK";
   $("#field-price").value = p.price;
   $("#field-stock").value = p.stock;
+  $("#field-availability").value = p.availability || "available";
+  $("#field-release").value = p.release_date || "";
   $("#field-vat").value = p.vat_rate_id || "";
   $("#field-position").value = p.position || 0;
   $("#field-ean").value = p.ean || "";
@@ -366,6 +372,9 @@ $("#product-form").addEventListener("submit", async (e) => {
       price: parseFloat($("#field-price").value),
       price_currency: $("#field-currency").value,
       stock: parseInt($("#field-stock").value, 10),
+      availability: $("#field-availability").value || "available",
+      // Null rather than "" when absent - it's a date column.
+      release_date: $("#field-release").value || null,
       vat_rate_id: vatValue ? parseInt(vatValue, 10) : null,
       position: parseInt($("#field-position").value, 10) || 0,
       // Stored null rather than "" when absent, so the feed can tell
@@ -409,6 +418,26 @@ $("#field-image").addEventListener("change", () => {
   };
   reader.readAsDataURL(file);
 });
+
+// ---------- Availability statuses ----------
+
+async function loadAvailabilityStatuses() {
+  const { data, error } = await supabaseClient
+    .from("availability_statuses")
+    .select("code, label")
+    .order("position", { ascending: true });
+  // Fall back to the two built-in statuses so the form still works if the
+  // table can't be read.
+  availabilityStatuses = !error && data && data.length
+    ? data
+    : [{ code: "available", label: "Skladem" }, { code: "presale", label: "Předprodej" }];
+  $("#field-availability").innerHTML = availabilityStatuses
+    .map(s => `<option value="${escapeAttr(s.code)}">${escapeHtml(s.label)}</option>`).join("");
+}
+
+function availabilityLabel(code) {
+  return (availabilityStatuses.find(s => s.code === code) || { label: code }).label;
+}
 
 // ---------- VAT rates ----------
 

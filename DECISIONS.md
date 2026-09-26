@@ -396,6 +396,52 @@ empty strings or zeros — when absent.
 
 ---
 
+## Availability and presale
+
+**Products carry an availability status and a release date**
+(`availability-migration.sql`). `available` ("Skladem") is the default and
+what every older product is; `presale` ("Předprodej") is for goods ordered
+from the distributor but not released yet. A presale is orderable up to its
+stock and shows as "Předprodej · vychází 13. 11. 2026 · 6 Ks".
+
+**Statuses are a table, not a check constraint**, because more are expected.
+A new status is a row in `availability_statuses` plus display code if it
+needs special wording.
+
+**Presale is switched to available by hand**, when the goods actually arrive —
+releases slip, so the release date alone doesn't prove anything is on the
+shelf.
+
+**`release_date` is for every product, not only presales.** The shop is meant
+to be sorted by it later, so existing stock needs dates too (see backlog).
+
+## Products created by the supplier bot
+
+**When the supplier bot (`PJPT1989/cernyrytir-news-watcher`) orders booster
+boxes from Černý Rytíř, it creates the matching product here** through the
+`supplier-product` Edge Function. Only products that don't exist yet: if the
+id or the MTGStocks product is already in the shop, nothing changes and the
+admin is e-mailed.
+
+**The function can only create, behind its own token.** The bot runs on a
+server that browses third-party sites; the service role key would give it
+every customer and order, and an admin login everything admin can do. The
+function holds the service role itself, validates every field, fetches images
+only from the distributor's image server, and is protected by
+`SUPPLIER_PRODUCT_TOKEN`, which can be rotated on its own.
+
+**What the bot sends:** id `<set code>-<cl|dr>` from MTGStocks' set
+abbreviation; category `collector` for collector boxes and `draft` for
+everything else; the distributor's price including VAT plus 10 %; the
+distributor's 700 px product photo; the MTGStocks id and links; TCGplayer's
+English description, translated to Czech by hand in admin afterwards. A case
+ordered from the distributor becomes the box product: stock = 6 × cases,
+price per box = case price / 6 (+10 %), status presale with the distributor's
+release date. Single boxes go straight to `available`.
+
+**New products go on top of their category** (the others shift down by one).
+Temporary - the plan is to sort by release date.
+
 ## E-mail and invoices
 
 **E-mail goes through Resend**, from `objednavky@objednavky.tomano.cz`.
@@ -421,6 +467,7 @@ render.
 | `PACKETA_API_PASSWORD`, `PACKETA_SENDER_INDICATION` | packeta-create-packet |
 | `MYGLS_API_BASE`, `MYGLS_USERNAME`, `MYGLS_PASSWORD`, `MYGLS_CLIENT_NUMBER` | gls-create-label |
 | `RESEND_API_KEY` | send-order-emails, send-invoice-email |
+| `SUPPLIER_PRODUCT_TOKEN` | supplier-product (shared with the supplier bot) |
 
 `TCGAPI_KEY` was retired with the move to MTGStocks and nothing reads it —
 if it still appears among the secrets, it can simply be deleted.

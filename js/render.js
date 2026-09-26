@@ -18,9 +18,24 @@ function priceCardHtml(p) {
   return `${formatKc(getCzkPrice(p))} <span class="eur">(${getEurPrice(p)} Euro s DPH)</span>`;
 }
 
+// The availability line under the price: "Skladem 3 Ks", "Skladem 0", or for a
+// presale "Předprodej · vychází 13. 11. 2026 · 6 Ks". Returns [css class, text].
+function availabilityInfo(p) {
+  const label = AVAILABILITY_LABELS[p.availability] || AVAILABILITY_LABELS.available;
+  if (p.availability === "presale") {
+    const parts = [label];
+    if (p.releaseDate) {
+      const d = new Date(p.releaseDate + "T00:00:00");
+      parts.push(`vychází ${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`);
+    }
+    parts.push(p.stock > 0 ? `${p.stock} Ks` : "vyprodáno");
+    return [p.stock > 0 ? "presale" : "out", parts.join(" · ")];
+  }
+  return p.stock > 0 ? ["ok", `${label} ${p.stock} Ks`] : ["out", `${label} 0`];
+}
+
 function productCard(p) {
-  const stockClass = p.stock > 0 ? "ok" : "out";
-  const stockLabel = p.stock > 0 ? `Skladem ${p.stock} Ks` : "Skladem 0";
+  const [stockClass, stockLabel] = availabilityInfo(p);
   const action = p.stock > 0
     ? `<button class="btn buy" onclick="addToCart('${p.id}',1); this.textContent='Přidáno ✓'; setTimeout(()=>this.textContent='DO KOŠÍKU',1200);">DO KOŠÍKU</button>`
     : `<a class="btn detail" href="product.html?id=${p.id}">DETAIL</a>`;
@@ -103,8 +118,7 @@ function renderProduct() {
     return;
   }
   document.title = p.name + " - Tomano Collection";
-  const stockClass = p.stock > 0 ? "ok" : "out";
-  const stockLabel = p.stock > 0 ? `Skladem ${p.stock} Ks` : "Skladem 0";
+  const [stockClass, stockLabel] = availabilityInfo(p);
   const lang = getPriceLang();
   const priceBig = lang === "en" ? formatDisplayAmount(getEurPrice(p)) : formatKc(getCzkPrice(p));
   const priceEurLine = lang === "en" ? "" : `<div class="price-eur">${getEurPrice(p)} Euro s DPH</div>`;
@@ -239,7 +253,7 @@ async function bootShop(category) {
   const grid = document.getElementById("grid");
   if (grid) grid.innerHTML = `<p class="loading-msg">Načítání produktů…</p>`;
 
-  [PRODUCTS] = await Promise.all([fetchProducts(), fetchExchangeRate()]);
+  [PRODUCTS, AVAILABILITY_LABELS] = await Promise.all([fetchProducts(), fetchAvailabilityLabels(), fetchExchangeRate()]);
 
   if (category) renderGrid(category);
   renderProduct();

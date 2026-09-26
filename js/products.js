@@ -24,6 +24,21 @@ async function fetchProducts() {
     links: row.links || [],
     position: row.position || 0,
     vatRateId: row.vat_rate_id,
-    priceCurrency: row.price_currency || "CZK"
+    priceCurrency: row.price_currency || "CZK",
+    availability: row.availability || "available",
+    releaseDate: row.release_date || null
   }));
+}
+
+// Customer-facing names of availability statuses (table `availability_statuses`).
+// Falls back to the built-in names so a failed load never breaks the shop.
+let AVAILABILITY_LABELS = { available: "Skladem", presale: "Předprodej" };
+
+async function fetchAvailabilityLabels() {
+  const { data, error } = await supabaseClient.from("availability_statuses").select("code, label");
+  if (error || !data) {
+    console.error("Failed to load availability statuses:", error);
+    return AVAILABILITY_LABELS;
+  }
+  return { ...AVAILABILITY_LABELS, ...Object.fromEntries(data.map(s => [s.code, s.label])) };
 }

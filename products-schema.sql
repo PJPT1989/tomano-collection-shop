@@ -39,7 +39,9 @@ create table if not exists products (
   position integer not null default 0,
   ean text,
   weight_g integer not null default 1000,
-  mtgstocks_id integer
+  mtgstocks_id integer,
+  availability text not null default 'available',  -- references availability_statuses(code); see availability-migration.sql
+  release_date date
 );
 
 alter table products enable row level security;

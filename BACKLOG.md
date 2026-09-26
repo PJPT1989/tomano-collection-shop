@@ -49,6 +49,11 @@ collector, 1100 g draft, 900 g set, plus 300 g per parcel for packaging.
 Refine individual products in admin if it ever matters — but it mostly
 won't, see the decision below.
 
+**Release dates for current stock.** `release_date` exists on every
+product now, but only products created by the supplier bot fill it in. The
+existing ones need their dates before the shop can be sorted by release date
+(which will replace "new products on top").
+
 ## Deferred features
 
 **Automated database backup.** Staying on the Supabase free plan, which

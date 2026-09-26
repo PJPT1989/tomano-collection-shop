@@ -13,10 +13,18 @@
 // operation, behind its own token, which can be rotated without touching
 // anything else.
 //
+// Two kinds of products come through here:
+//   - boxes the bot has just ordered for the owner (want list): the owner's
+//     own stock from then on, like any product added in admin;
+//   - boxes offered straight from the distributor's stock ("supplier_managed":
+//     true, status "supplier", with the distributor's product name in
+//     "supplier_name"), kept in sync afterwards by the supplier-sync function.
+//
 // Request (POST, JSON), with header `x-supplier-token: <SUPPLIER_PRODUCT_TOKEN>`:
 //   { "dry_run": false,
 //     "product": { id, cat, name, price, stock, availability, release_date,
-//                  ean, weight_g, mtgstocks_id, links, description, image_url } }
+//                  ean, weight_g, mtgstocks_id, links, description, image_url,
+//                  supplier_managed?, supplier_name? } }
 // Response:
 //   { result: "created" | "would_create" | "exists", product: {...} }
 //   { error: "..." } with status 400/401/500 - messages are passed on verbatim.
@@ -78,8 +86,16 @@ function validate(p: Record<string, unknown>, statuses: string[]) {
   try { imageHost = new URL(imageUrl).host; } catch { /* reported below */ }
   if (imageHost !== IMAGE_HOST) throw new BadRequest(`image_url must be on ${IMAGE_HOST}`);
 
+  const managed = p.supplier_managed === true;
+  const supplierName = s(p.supplier_name) || null;
+  if (managed && !supplierName) throw new BadRequest("supplier_name is required for supplier_managed");
+  if (managed !== (availability === "supplier")) {
+    throw new BadRequest('availability "supplier" goes with supplier_managed, and only with it');
+  }
+
   return {
     id, cat, name, price, stock, availability, release_date: release, ean, weight_g: weight,
+    supplier_managed: managed, supplier_name: supplierName,
     mtgstocks_id: mtgstocks, links, description: typeof p.description === "string" ? p.description : "",
     image_url: imageUrl,
   };
@@ -116,6 +132,7 @@ Deno.serve(async (req) => {
       availability: p.availability, release_date: p.release_date, ean: p.ean, weight_g: p.weight_g,
       mtgstocks_id: p.mtgstocks_id, links: p.links, description: p.description,
       vat_rate_id: vat?.id ?? null, position: 1, img: "",
+      supplier_managed: p.supplier_managed, supplier_name: p.supplier_name, hidden: p.supplier_managed && p.stock === 0,
     };
     if (dryRun) return jsonResponse({ result: "would_create", product: { ...row, img: p.image_url } });
 

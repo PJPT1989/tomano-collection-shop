@@ -32,6 +32,9 @@ const MANUFACTURER = "Wizards of the Coast";
 // the shop actually promises, and overstating it is how you earn
 // complaints rather than sales.
 const DELIVERY_DAYS = "2";
+// Boxes offered from the distributor's stock ("Skladem u dodavatele") ship in
+// 5-7 working days, so they must not be advertised as ready to send.
+const SUPPLIER_DELIVERY_DAYS = "7";
 
 // Seeded products carry a relative path ("images/products/FRA_DR.jpg"),
 // while anything uploaded through admin carries a full Supabase storage
@@ -70,8 +73,9 @@ Deno.serve(async () => {
   try {
     const { data: products, error } = await supabase
       .from("products")
-      .select("id, name, description, price, price_currency, stock, img, ean, vat_rates(rate)")
+      .select("id, name, description, price, price_currency, stock, img, ean, availability, vat_rates(rate)")
       .gt("stock", 0)
+      .eq("hidden", false)
       .order("id");
 
     if (error) {
@@ -99,7 +103,7 @@ Deno.serve(async () => {
         // Omitted rather than sent empty when unknown: a blank EAN is not
         // the same as no EAN, and the element is optional for this category.
         p.ean ? `<EAN>${xmlEscape(p.ean)}</EAN>` : "",
-        `<DELIVERY_DATE>${DELIVERY_DAYS}</DELIVERY_DATE>`,
+        `<DELIVERY_DATE>${p.availability === "supplier" ? SUPPLIER_DELIVERY_DAYS : DELIVERY_DAYS}</DELIVERY_DATE>`,
         "</SHOPITEM>",
       ].filter(Boolean).join("");
     }).join("");

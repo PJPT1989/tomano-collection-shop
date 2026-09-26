@@ -69,12 +69,16 @@ Deno.serve(async (req) => {
 
     const rate = await getExchangeRate();
     const orderItems: Record<string, unknown>[] = [];
+    // Lines the supplier bot has to order from the distributor (products it
+    // mirrors from the distributor's stock) - queued below, ordered in the
+    // background so the customer never waits for it.
+    const supplierLines: Record<string, unknown>[] = [];
     let itemsTotalCzk = 0;
 
     for (const requested of items) {
       const { data: product, error } = await supabase
         .from("products")
-        .select("id, name, price, price_currency, stock, vat_rate_id, vat_rates(rate)")
+        .select("id, name, price, price_currency, stock, hidden, supplier_managed, supplier_name, vat_rate_id, vat_rates(rate)")
         .eq("id", requested.productId)
         .single();
 
@@ -85,7 +89,7 @@ Deno.serve(async (req) => {
       if (!qty || qty < 1) {
         return jsonResponse({ error: `Neplatné množství pro ${product.name}.` }, 400);
       }
-      if (product.stock < qty) {
+      if (product.hidden || product.stock < qty) {
         return jsonResponse({ error: `Produkt "${product.name}" již není skladem v požadovaném množství.` }, 400);
       }
 
@@ -94,6 +98,15 @@ Deno.serve(async (req) => {
         : product.price;
       const lineTotalCzk = unitPriceCzk * qty;
       itemsTotalCzk += lineTotalCzk;
+
+      if (product.supplier_managed) {
+        supplierLines.push({
+          product_id: product.id,
+          supplier_name: product.supplier_name ?? product.name,
+          qty,
+          unit_price_czk: unitPriceCzk,
+        });
+      }
 
       orderItems.push({
         product_id: product.id,
@@ -157,6 +170,16 @@ Deno.serve(async (req) => {
       if (current) {
         await supabase.from("products").update({ stock: Math.max(0, current.stock - it.qty) }).eq("id", it.product_id);
       }
+    }
+
+    // Queue the supplier lines. A failure here must not fail the customer's
+    // order (it already exists); the admin copy of the order e-mail still
+    // arrives, and the missing queue entry shows in admin.
+    if (supplierLines.length) {
+      const { error: queueError } = await supabase
+        .from("supplier_order_items")
+        .insert(supplierLines.map((l) => ({ ...l, order_id: order.id })));
+      if (queueError) console.error("supplier_order_items insert failed:", queueError.message);
     }
 
     // Best-effort: the order already succeeded, so an email hiccup here

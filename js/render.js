@@ -18,10 +18,14 @@ function priceCardHtml(p) {
   return `${formatKc(getCzkPrice(p))} <span class="eur">(${getEurPrice(p)} Euro s DPH)</span>`;
 }
 
-// The availability line under the price: "Skladem 3 Ks", "Skladem 0", or for a
-// presale "Předprodej · vychází 13. 11. 2026 · 6 Ks". Returns [css class, text].
+// The availability line under the price: "Skladem 3 Ks", "Skladem 0", for a
+// presale "Předprodej · vychází 13. 11. 2026 · 6 Ks", for a box offered from
+// the distributor's stock "Skladem u dodavatele 3 Ks – odesíláme do 5–7
+// pracovních dnů". Returns [css class, text].
 function availabilityInfo(p) {
+  if (p.hidden) return ["out", "Momentálně nedostupné"];
   const label = AVAILABILITY_LABELS[p.availability] || AVAILABILITY_LABELS.available;
+  const note = AVAILABILITY_NOTES[p.availability];
   if (p.availability === "presale") {
     const parts = [label];
     if (p.releaseDate) {
@@ -31,12 +35,18 @@ function availabilityInfo(p) {
     parts.push(p.stock > 0 ? `${p.stock} Ks` : "vyprodáno");
     return [p.stock > 0 ? "presale" : "out", parts.join(" · ")];
   }
-  return p.stock > 0 ? ["ok", `${label} ${p.stock} Ks`] : ["out", `${label} 0`];
+  if (p.stock <= 0) return ["out", `${label} 0`];
+  return ["ok", `${label} ${p.stock} Ks` + (note ? ` – ${note}` : "")];
+}
+
+// Can be put in the cart: in stock and not hidden.
+function orderable(p) {
+  return p.stock > 0 && !p.hidden;
 }
 
 function productCard(p) {
   const [stockClass, stockLabel] = availabilityInfo(p);
-  const action = p.stock > 0
+  const action = orderable(p)
     ? `<button class="btn buy" onclick="addToCart('${p.id}',1); this.textContent='Přidáno ✓'; setTimeout(()=>this.textContent='DO KOŠÍKU',1200);">DO KOŠÍKU</button>`
     : `<a class="btn detail" href="product.html?id=${p.id}">DETAIL</a>`;
   return `
@@ -52,7 +62,7 @@ function productCard(p) {
 function renderGrid(category) {
   const grid = document.getElementById("grid");
   if (!grid) return;
-  let items = PRODUCTS.filter(p => p.cat === category)
+  let items = PRODUCTS.filter(p => p.cat === category && !p.hidden)
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   const countEl = document.getElementById("item-count");
   if (countEl) countEl.textContent = items.length;
@@ -130,8 +140,8 @@ function renderProduct() {
       ${priceEurLine}
       <div class="stock ${stockClass}">${stockLabel}</div>
       <div class="qty-row">
-        <input type="number" id="qty" value="1" min="1" ${p.stock > 0 ? "" : "disabled"}>
-        <button class="btn buy" id="add-btn" ${p.stock > 0 ? "" : "disabled"} onclick="addToCart('${p.id}', parseInt(document.getElementById('qty').value,10)||1); this.textContent='Přidáno do košíku ✓'; setTimeout(()=>this.textContent='DO KOŠÍKU',1500);">DO KOŠÍKU</button>
+        <input type="number" id="qty" value="1" min="1" ${orderable(p) ? "" : "disabled"}>
+        <button class="btn buy" id="add-btn" ${orderable(p) ? "" : "disabled"} onclick="addToCart('${p.id}', parseInt(document.getElementById('qty').value,10)||1); this.textContent='Přidáno do košíku ✓'; setTimeout(()=>this.textContent='DO KOŠÍKU',1500);">DO KOŠÍKU</button>
       </div>
       ${renderLinks(p.links)}
     </div>

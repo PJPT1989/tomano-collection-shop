@@ -41,7 +41,10 @@ create table if not exists products (
   weight_g integer not null default 1000,
   mtgstocks_id integer,
   availability text not null default 'available',  -- references availability_statuses(code); see availability-migration.sql
-  release_date date
+  release_date date,
+  supplier_managed boolean not null default false,  -- supplier-sync-migration.sql
+  hidden boolean not null default false,
+  supplier_name text
 );
 
 alter table products enable row level security;

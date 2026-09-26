@@ -54,7 +54,7 @@ function productRowHtml(p, isFirst, isLast) {
         <button class="reorder-btn" ${isLast ? "disabled" : ""} onclick="moveProduct('${p.id}', 1)" title="Posunout níž">▼</button>
       </td>
       <td><img src="${escapeHtml(p.img || '')}" alt="" class="admin-thumb"></td>
-      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.name)}${p.supplier_managed ? ` <span style="color:#1565c0;" title="Spravuje bot dodavatele: sklad, cenu a viditelnost přepisuje každé 2 minuty.">[dodavatel]</span>` : ""}${p.hidden ? ` <span style="color:#999;">[skryto]</span>` : ""}</td>
       <td>${CATEGORY_LABELS[p.cat] || escapeHtml(p.cat)}</td>
       <td>${priceLabel}</td>
       <td>${p.stock}${p.availability && p.availability !== "available" ? ` <span style="color:#d35400;">(${escapeHtml(availabilityLabel(p.availability))}${p.release_date ? ", " + escapeHtml(p.release_date) : ""})</span>` : ""}</td>

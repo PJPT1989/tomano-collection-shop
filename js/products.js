@@ -26,19 +26,23 @@ async function fetchProducts() {
     vatRateId: row.vat_rate_id,
     priceCurrency: row.price_currency || "CZK",
     availability: row.availability || "available",
-    releaseDate: row.release_date || null
+    releaseDate: row.release_date || null,
+    hidden: row.hidden === true
   }));
 }
 
 // Customer-facing names of availability statuses (table `availability_statuses`).
 // Falls back to the built-in names so a failed load never breaks the shop.
-let AVAILABILITY_LABELS = { available: "Skladem", presale: "Předprodej" };
+let AVAILABILITY_LABELS = { available: "Skladem", presale: "Předprodej", supplier: "Skladem u dodavatele" };
+// Delivery notes shown after the label, e.g. "odesíláme do 5–7 pracovních dnů".
+let AVAILABILITY_NOTES = { supplier: "odesíláme do 5–7 pracovních dnů" };
 
 async function fetchAvailabilityLabels() {
-  const { data, error } = await supabaseClient.from("availability_statuses").select("code, label");
+  const { data, error } = await supabaseClient.from("availability_statuses").select("code, label, note");
   if (error || !data) {
     console.error("Failed to load availability statuses:", error);
     return AVAILABILITY_LABELS;
   }
+  for (const s of data) if (s.note) AVAILABILITY_NOTES[s.code] = s.note;
   return { ...AVAILABILITY_LABELS, ...Object.fromEntries(data.map(s => [s.code, s.label])) };
 }

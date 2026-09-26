@@ -209,6 +209,10 @@ async function openOrderDetail(id) {
   const { data: items, error: itemsErr } = await supabaseClient.from("order_items").select("*").eq("order_id", id);
   const { data: invoice } = await supabaseClient.from("invoices").select("*").eq("order_id", id).maybeSingle();
   const { data: shipment } = await supabaseClient.from("shipments").select("*").eq("order_id", id).maybeSingle();
+  // Lines the supplier bot orders from the distributor (missing table before
+  // supplier-sync-migration.sql = simply none).
+  const { data: supplierLines } = await supabaseClient
+    .from("supplier_order_items").select("*").eq("order_id", id).order("id");
 
   if (orderErr || itemsErr) {
     alert("Nepodařilo se načíst objednávku: " + (orderErr?.message || itemsErr?.message));
@@ -263,6 +267,15 @@ async function openOrderDetail(id) {
       <span id="resend-email-status" style="margin-left:10px; font-size:13px; color:#888;"></span>
     </div>
 
+    ${supplierLines && supplierLines.length ? `
+      <div class="admin-section-divider"></div>
+      <h3>Objednávka u dodavatele (Černý Rytíř)</h3>
+      <table class="cart-table">
+        <thead><tr><th>Produkt</th><th>Množství</th><th>Stav</th><th>Obj. u dodavatele</th><th>Poznámka</th></tr></thead>
+        <tbody>${supplierLines.map(supplierLineHtml).join("")}</tbody>
+      </table>
+    ` : ""}
+
     ${shipment ? `
       <div class="admin-section-divider"></div>
       <h3>Zásilka</h3>
@@ -279,6 +292,28 @@ async function openOrderDetail(id) {
     <h3>Faktura</h3>
     <div id="invoice-section">${invoiceSectionHtml(order.id, invoice)}</div>
   `;
+}
+
+const SUPPLIER_STATUS_LABELS = {
+  pending: ["Čeká na objednání", "#888"],
+  ordering: ["Objednává se…", "#1565c0"],
+  ordered: ["Objednáno", "#2e7d32"],
+  failed: ["Neobjednáno", "#c62828"],
+  unclear: ["Nejasné – zkontrolujte u dodavatele", "#e65100"],
+};
+
+function supplierLineHtml(l) {
+  const [label, color] = SUPPLIER_STATUS_LABELS[l.status] || [l.status, "#888"];
+  const qty = l.status === "ordered" && l.ordered_qty != null && l.ordered_qty !== l.qty
+    ? `${l.ordered_qty} z ${l.qty}` : `${l.qty}`;
+  return `
+    <tr>
+      <td>${escapeHtml(l.supplier_name)}</td>
+      <td>${qty}</td>
+      <td style="color:${color}; font-weight:bold;">${label}</td>
+      <td>${escapeHtml(l.supplier_order_id || "—")}</td>
+      <td>${escapeHtml(l.note || "")}</td>
+    </tr>`;
 }
 
 function invoiceSectionHtml(orderId, invoice) {

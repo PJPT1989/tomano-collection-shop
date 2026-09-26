@@ -54,6 +54,12 @@ product now, but only products created by the supplier bot fill it in. The
 existing ones need their dates before the shop can be sorted by release date
 (which will replace "new products on top").
 
+**Deleting a product leaves its image in storage.** Admin's delete removes
+the row but not the file in `product-images`, so each deleted product leaves an
+orphaned image (~250 KB each, seen with a test product of the supplier bot).
+Harmless at this volume; delete the file too when deleting a product, like
+orders already do for invoices and labels.
+
 ## Deferred features
 
 **Automated database backup.** Staying on the Supabase free plan, which

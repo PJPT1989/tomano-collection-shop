@@ -1,6 +1,7 @@
 # Backlog
 
-Things known to be outstanding, and why. Cutover from the current shop at
+Things known to be outstanding, and why. Settled decisions are in
+[DECISIONS.md](DECISIONS.md). Cutover from the current shop at
 tomano.cz is planned for around late October 2026.
 
 ## Before cutover
@@ -81,44 +82,6 @@ those slugs is worth keeping — a host with a redirects file makes it easy.
 
 ## Decisions already made
 
-Recorded so they don't get reopened by accident.
-
-**Heureka `ITEM_ID`s are this project's own**, not the old shop's. Heureka
-treats ITEM_ID as permanently identifying an offer, so preserving pairing
-would have meant carrying the old shop's inconsistent ids (`ECL`, the
-transposed `SMP_CL`) forever. There was no pairing history worth
-protecting and EANs are present, so re-pairing is largely automatic.
-
-**Staying on Supabase free rather than $25/month Pro.** The capacity
-limits are nowhere near binding. Project pausing after seven days of
-inactivity is already prevented by the two existing daily `pg_cron` jobs —
-**if those are ever removed, the pausing risk comes back.** The real gap
-is backups, hence the item above. Worth revisiting at roughly ten times
-the current order volume.
-
-**Parcel weights err high on purpose.** Zásilkovna charge one flat rate up
-to 5 kg, so on any normal order an over-estimate costs nothing while an
-under-estimate earns a reweigh and a correction invoice. Precision would
-only start to pay near 5 kg, which is about five draft boxes.
-
-**Invoice and order numbering starts at `2026000100`** to clear the
-numbers the old shop had already issued this year, and falls back to 1
-from 2027. The 2026 special case expires by itself — it is not an
-arbitrary offset to be tidied away.
-
-**Prices and marketplace links come from MTGStocks' undocumented API.**
-It is free, unauthenticated, and genuinely live, which the paid API it
-replaced was not. But there are no terms granting use, so it could change
-or start refusing us — if prices stop updating, check that first. Two
-non-obvious constraints it imposes: they send no CORS headers, so it can
-only be called from an Edge Function, never from the browser; and they
-reject requests whose User-Agent looks automated, returning HTML instead
-of JSON. Their URLs also arrive carrying MTGStocks' affiliate and
-referrer parameters, which are deliberately stripped.
-
-**The link finder is a picker, not an automatic match.** This shop says
-"Play Booster Box", MTGStocks says "Play Booster Display", older sets say
-"Draft Booster Box", and every set also offers a "Display Case". A rule
-equating those would eventually attach the wrong product — and a wrong
-link is worse than a missing one, because nobody clicks their own links
-to check.
+Moved to [DECISIONS.md](DECISIONS.md), which records every design and
+infrastructure decision in the project with its reasoning — keeping them
+here as well would leave two copies to drift apart.
